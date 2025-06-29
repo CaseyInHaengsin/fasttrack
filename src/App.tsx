@@ -21,6 +21,7 @@ interface Fast {
   startTime: Date;
   endTime: Date;
   duration: number;
+  notes?: string;
 }
 
 function App() {
@@ -118,7 +119,7 @@ function App() {
     setUser(updatedUser);
   };
 
-  const handleAddFast = async (startTime: Date, endTime: Date) => {
+  const handleAddFast = async (startTime: Date, endTime: Date, notes?: string) => {
     if (!user) return;
 
     try {
@@ -130,7 +131,8 @@ function App() {
       const newFast = await apiService.saveFast(user.id, {
         startTime,
         endTime,
-        duration
+        duration,
+        notes
       });
       
       setFasts(prevFasts => [...prevFasts, newFast]);

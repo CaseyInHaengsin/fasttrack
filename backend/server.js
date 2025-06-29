@@ -87,7 +87,7 @@ app.post('/api/fasts/:userId', async (req, res) => {
       return res.status(403).json({ error: 'Access denied' });
     }
     
-    const { startTime, endTime, duration } = req.body;
+    const { startTime, endTime, duration, notes } = req.body;
     
     const fasts = await readUserData(userId, 'fasts');
     const newFast = {
@@ -95,6 +95,7 @@ app.post('/api/fasts/:userId', async (req, res) => {
       startTime,
       endTime,
       duration,
+      notes: notes || '',
       createdAt: new Date().toISOString()
     };
     

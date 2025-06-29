@@ -8,6 +8,7 @@ interface Fast {
   startTime: Date;
   endTime: Date;
   duration: number;
+  notes?: string;
 }
 
 interface WeightEntry {
@@ -74,7 +75,8 @@ class ApiService {
       body: JSON.stringify({
         startTime: fast.startTime.toISOString(),
         endTime: fast.endTime.toISOString(),
-        duration: fast.duration
+        duration: fast.duration,
+        notes: fast.notes
       })
     });
 
