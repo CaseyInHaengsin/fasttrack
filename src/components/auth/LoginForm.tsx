@@ -55,6 +55,9 @@ export function LoginForm({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!credentials.username.trim() || !credentials.password) {
+      return;
+    }
     await onLogin(credentials);
   };
 
@@ -70,6 +73,9 @@ export function LoginForm({
             <p className={`mt-2 ${isDarkTheme ? 'text-gray-300' : 'text-gray-600'}`}>
               Your personal fasting companion
             </p>
+            <p className={`mt-1 text-sm ${isDarkTheme ? 'text-gray-400' : 'text-gray-500'}`}>
+              Works across all your devices
+            </p>
           </div>
 
           {error && (
@@ -81,11 +87,12 @@ export function LoginForm({
           <form onSubmit={handleSubmit} className="space-y-6">
             <Input
               type="text"
-              label="Username"
-              placeholder="Enter your username"
+              label="Username or Email"
+              placeholder="Enter your username or email"
               value={credentials.username}
               onChange={(e) => setCredentials(prev => ({ ...prev, username: e.target.value }))}
               required
+              disabled={isLoading}
               className={isDarkTheme ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' : ''}
             />
 
@@ -97,12 +104,14 @@ export function LoginForm({
                 value={credentials.password}
                 onChange={(e) => setCredentials(prev => ({ ...prev, password: e.target.value }))}
                 required
+                disabled={isLoading}
                 className={isDarkTheme ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400 pr-12' : 'pr-12'}
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className={`absolute right-3 top-8 ${isDarkTheme ? 'text-gray-400 hover:text-gray-300' : 'text-gray-500 hover:text-gray-700'}`}
+                disabled={isLoading}
+                className={`absolute right-3 top-8 ${isDarkTheme ? 'text-gray-400 hover:text-gray-300' : 'text-gray-500 hover:text-gray-700'} disabled:opacity-50`}
               >
                 {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
               </button>
@@ -111,7 +120,7 @@ export function LoginForm({
             <Button 
               type="submit" 
               className="w-full py-3 text-lg"
-              disabled={isLoading}
+              disabled={isLoading || !credentials.username.trim() || !credentials.password}
             >
               <LogIn className="w-5 h-5 mr-2" />
               {isLoading ? 'Signing In...' : 'Sign In'}
@@ -123,7 +132,8 @@ export function LoginForm({
               Don't have an account?{' '}
               <button
                 onClick={onSwitchToRegister}
-                className={`font-medium ${iconColors[theme as keyof typeof iconColors]} hover:underline`}
+                disabled={isLoading}
+                className={`font-medium ${iconColors[theme as keyof typeof iconColors]} hover:underline disabled:opacity-50`}
               >
                 Create one
               </button>
@@ -145,6 +155,13 @@ export function LoginForm({
               <p><strong>Admin:</strong> admin / admin123</p>
               <p><strong>Or create a new account</strong></p>
             </div>
+          </div>
+
+          {/* Cross-device info */}
+          <div className={`mt-4 p-3 rounded-lg ${isDarkTheme ? 'bg-blue-900/30' : 'bg-blue-50'}`}>
+            <p className={`text-xs text-center ${isDarkTheme ? 'text-blue-300' : 'text-blue-700'}`}>
+              🌐 Your account works on all devices and browsers
+            </p>
           </div>
         </CardContent>
       </Card>

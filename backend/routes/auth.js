@@ -20,6 +20,14 @@ const createAuthRoutes = (userService) => {
       if (password.length < 6) {
         return res.status(400).json({ error: 'Password must be at least 6 characters long' });
       }
+
+      if (username.length < 3) {
+        return res.status(400).json({ error: 'Username must be at least 3 characters long' });
+      }
+
+      if (!email.includes('@')) {
+        return res.status(400).json({ error: 'Valid email address is required' });
+      }
       
       const user = await userService.register({ username, email, password });
       
@@ -47,7 +55,11 @@ const createAuthRoutes = (userService) => {
       }
       
       const result = await userService.login({ username, password });
-      res.json(result);
+      res.json({
+        user: result.user,
+        token: result.token,
+        message: 'Login successful'
+      });
     } catch (error) {
       console.error('Login error:', error);
       res.status(401).json({ error: error.message });
@@ -65,17 +77,58 @@ const createAuthRoutes = (userService) => {
     }
   });
 
+  // Logout all sessions for current user
+  router.post('/logout-all', authMiddleware(userService), async (req, res) => {
+    try {
+      const loggedOutCount = await userService.logoutAllSessions(req.user.id);
+      res.json({ 
+        message: `Logged out from ${loggedOutCount} sessions`,
+        count: loggedOutCount
+      });
+    } catch (error) {
+      console.error('Logout all error:', error);
+      res.status(500).json({ error: 'Failed to logout all sessions' });
+    }
+  });
+
   // Get current user profile
   router.get('/me', authMiddleware(userService), (req, res) => {
-    res.json({ user: req.user });
+    res.json({ 
+      user: req.user,
+      message: 'Profile retrieved successfully'
+    });
+  });
+
+  // Get active sessions for current user
+  router.get('/sessions', authMiddleware(userService), async (req, res) => {
+    try {
+      const sessions = await userService.getActiveSessions(req.user.id);
+      res.json(sessions);
+    } catch (error) {
+      console.error('Sessions fetch error:', error);
+      res.status(500).json({ error: 'Failed to fetch sessions' });
+    }
   });
 
   // Update user profile
   router.put('/profile', authMiddleware(userService), async (req, res) => {
     try {
       const updates = req.body;
+      
+      // Validate updates
+      if (updates.username && updates.username.length < 3) {
+        return res.status(400).json({ error: 'Username must be at least 3 characters long' });
+      }
+      
+      if (updates.email && !updates.email.includes('@')) {
+        return res.status(400).json({ error: 'Valid email address is required' });
+      }
+      
       const updatedUser = await userService.updateUser(req.user.id, updates);
-      res.json({ user: updatedUser });
+      res.json({ 
+        user: updatedUser,
+        message: 'Profile updated successfully'
+      });
     } catch (error) {
       console.error('Profile update error:', error);
       res.status(400).json({ error: error.message });
@@ -105,7 +158,11 @@ const createAuthRoutes = (userService) => {
 
   // Validate token
   router.get('/validate', authMiddleware(userService), (req, res) => {
-    res.json({ valid: true, user: req.user });
+    res.json({ 
+      valid: true, 
+      user: req.user,
+      message: 'Token is valid'
+    });
   });
 
   return router;

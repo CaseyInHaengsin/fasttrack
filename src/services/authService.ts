@@ -19,6 +19,7 @@ class AuthService {
       try {
         // Validate token with server and load user data
         await this.loadCurrentUser();
+        console.log('🔑 Authentication restored from stored token');
       } catch (error) {
         console.error('Failed to validate stored token:', error);
         this.clearAuth();
@@ -51,6 +52,7 @@ class AuthService {
         createdAt: new Date(data.user.createdAt),
         lastLogin: data.user.lastLogin ? new Date(data.user.lastLogin) : undefined
       };
+      console.log(`👤 Loaded user profile: ${this.currentUser.username}`);
     } else {
       // Token is invalid, clear it
       throw new Error('Invalid token');
@@ -61,12 +63,14 @@ class AuthService {
     this.currentUser = user;
     this.authToken = token;
     localStorage.setItem('fasttrack_token', token);
+    console.log(`🔑 Authentication set for user: ${user.username}`);
   }
 
   private clearAuth(): void {
     this.currentUser = null;
     this.authToken = null;
     localStorage.removeItem('fasttrack_token');
+    console.log('🚪 Authentication cleared');
   }
 
   async register(data: RegisterData): Promise<User> {
@@ -80,12 +84,25 @@ class AuthService {
       throw new Error('Password must be at least 6 characters long');
     }
 
+    if (data.username.length < 3) {
+      throw new Error('Username must be at least 3 characters long');
+    }
+
+    if (!data.email.includes('@')) {
+      throw new Error('Valid email address is required');
+    }
+
     const response = await fetch(`${this.API_BASE_URL}/register`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify(data)
+      body: JSON.stringify({
+        username: data.username.trim(),
+        email: data.email.toLowerCase().trim(),
+        password: data.password,
+        confirmPassword: data.confirmPassword
+      })
     });
 
     if (!response.ok) {
@@ -101,18 +118,26 @@ class AuthService {
     };
 
     this.setAuth(user, result.token);
+    console.log(`✅ User registered successfully: ${user.username}`);
     return user;
   }
 
   async login(credentials: LoginCredentials): Promise<User> {
     await this.ensureInitialized();
 
+    if (!credentials.username || !credentials.password) {
+      throw new Error('Username and password are required');
+    }
+
     const response = await fetch(`${this.API_BASE_URL}/login`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify(credentials)
+      body: JSON.stringify({
+        username: credentials.username.trim(),
+        password: credentials.password
+      })
     });
 
     if (!response.ok) {
@@ -128,6 +153,7 @@ class AuthService {
     };
 
     this.setAuth(user, result.token);
+    console.log(`✅ User logged in successfully: ${user.username}`);
     return user;
   }
 
@@ -143,6 +169,7 @@ class AuthService {
             'Content-Type': 'application/json'
           }
         });
+        console.log('🚪 Logout request sent to server');
       } catch (error) {
         console.error('Logout request failed:', error);
       }
@@ -194,6 +221,7 @@ class AuthService {
     };
 
     this.currentUser = updatedUser;
+    console.log(`👤 Profile updated: ${updatedUser.username}`);
     return updatedUser;
   }
 
@@ -228,6 +256,8 @@ class AuthService {
       const error = await response.json();
       throw new Error(error.error || 'Failed to change password');
     }
+
+    console.log('🔒 Password changed successfully');
   }
 
   // Admin functions
@@ -277,6 +307,8 @@ class AuthService {
       const error = await response.json();
       throw new Error(error.error || 'Failed to delete user');
     }
+
+    console.log(`🗑️ User deleted: ${userId}`);
   }
 
   async toggleUserAdmin(userId: string): Promise<void> {
@@ -297,6 +329,51 @@ class AuthService {
     if (!response.ok) {
       const error = await response.json();
       throw new Error(error.error || 'Failed to update user');
+    }
+
+    console.log(`👑 Admin status toggled for user: ${userId}`);
+  }
+
+  // Session management
+  async getActiveSessions(): Promise<any[]> {
+    await this.ensureInitialized();
+
+    if (!this.authToken || !this.currentUser) {
+      throw new Error('Not authenticated');
+    }
+
+    const response = await fetch(`${this.API_BASE_URL}/sessions`, {
+      headers: {
+        'Authorization': `Bearer ${this.authToken}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (response.ok) {
+      return response.json();
+    }
+    
+    return [];
+  }
+
+  async logoutAllSessions(): Promise<void> {
+    await this.ensureInitialized();
+
+    if (!this.authToken) {
+      throw new Error('Not authenticated');
+    }
+
+    const response = await fetch(`${this.API_BASE_URL}/logout-all`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${this.authToken}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (response.ok) {
+      console.log('🚪 All sessions logged out');
+      this.clearAuth();
     }
   }
 }
