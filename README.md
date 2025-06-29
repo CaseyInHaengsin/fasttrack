@@ -281,6 +281,13 @@ echo '/var/lib/docker/containers/*/*.log {
 # Monitor with cron
 echo "0 */6 * * * /path/to/fasttrack/deploy.sh status > /var/log/fasttrack-status.log" | crontab -
 ```
+![image](https://github.com/user-attachments/assets/95ce99f0-5a3a-4e84-8a8a-c2df68d122d3)
+![image](https://github.com/user-attachments/assets/e52f6cd0-393a-48fc-9783-2bbff47ce838)
+![image](https://github.com/user-attachments/assets/3c463f4f-2ddd-4dc6-a596-e43dd03bb430)
+![image](https://github.com/user-attachments/assets/b4edb70a-ccd6-40ff-8a46-650ddd373a68)
+![image](https://github.com/user-attachments/assets/68933933-93e1-4f5c-b52a-be15df8ce09f)
+![image](https://github.com/user-attachments/assets/35d1c44d-6871-44a2-b455-98a1a362c0fc)
+
 
 ## 🤝 Contributing
 
