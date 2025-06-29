@@ -22,6 +22,7 @@ A beautiful, full-featured intermittent fasting tracker with persistent data sto
 - Docker and Docker Compose installed
 - Port 3004 available (change in docker-compose file to whatever)
 
+```
 ### Easy Deployment
 For ease of deployment
 git clone https://github.com/theqldcoalminer/fasttrack.git
