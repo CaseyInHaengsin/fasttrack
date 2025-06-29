@@ -20,7 +20,7 @@ A beautiful, full-featured intermittent fasting tracker with persistent data sto
 
 ### Prerequisites
 - Docker and Docker Compose installed
-- Port 3004 available
+- Port 3004 available (change in docker-compose file to whatever)
 
 ### Easy Deployment
 For ease of deployment
