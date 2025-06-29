@@ -2,14 +2,21 @@ const express = require('express');
 const cors = require('cors');
 const fs = require('fs').promises;
 const path = require('path');
+const UserService = require('./services/UserService');
+const createAuthRoutes = require('./routes/auth');
+const createAdminRoutes = require('./routes/admin');
+const { authMiddleware } = require('./middleware/auth');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
-const DATA_DIR = '/data';
+const DATA_DIR = process.env.DATA_DIR || '/data';
+
+// Initialize services
+const userService = new UserService(DATA_DIR);
 
 // Middleware
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '10mb' })); // Increased limit for avatar uploads
 
 // Ensure data directory exists
 const ensureDataDir = async () => {
@@ -38,17 +45,30 @@ const writeUserData = async (userId, type, data) => {
   await fs.writeFile(filePath, JSON.stringify(data, null, 2));
 };
 
-// API Routes
+// Authentication routes
+app.use('/api/auth', createAuthRoutes(userService));
+
+// Admin routes
+app.use('/api/admin', createAdminRoutes(userService));
 
 // Health check
 app.get('/health', (req, res) => {
   res.json({ status: 'healthy', timestamp: new Date().toISOString() });
 });
 
+// Protected routes (require authentication)
+app.use('/api', authMiddleware(userService));
+
 // Get user's fasting data
 app.get('/api/fasts/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
+    
+    // Ensure user can only access their own data (or admin can access any)
+    if (userId !== req.user.id && !req.user.isAdmin) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    
     const fasts = await readUserData(userId, 'fasts');
     res.json(fasts);
   } catch (error) {
@@ -61,6 +81,12 @@ app.get('/api/fasts/:userId', async (req, res) => {
 app.post('/api/fasts/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
+    
+    // Ensure user can only modify their own data
+    if (userId !== req.user.id) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    
     const { startTime, endTime, duration } = req.body;
     
     const fasts = await readUserData(userId, 'fasts');
@@ -86,6 +112,12 @@ app.post('/api/fasts/:userId', async (req, res) => {
 app.delete('/api/fasts/:userId/:fastId', async (req, res) => {
   try {
     const { userId, fastId } = req.params;
+    
+    // Ensure user can only modify their own data
+    if (userId !== req.user.id) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    
     const fasts = await readUserData(userId, 'fasts');
     const updatedFasts = fasts.filter(fast => fast.id !== fastId);
     await writeUserData(userId, 'fasts', updatedFasts);
@@ -100,6 +132,12 @@ app.delete('/api/fasts/:userId/:fastId', async (req, res) => {
 app.get('/api/weight/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
+    
+    // Ensure user can only access their own data (or admin can access any)
+    if (userId !== req.user.id && !req.user.isAdmin) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    
     const weights = await readUserData(userId, 'weights');
     res.json(weights);
   } catch (error) {
@@ -112,6 +150,12 @@ app.get('/api/weight/:userId', async (req, res) => {
 app.post('/api/weight/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
+    
+    // Ensure user can only modify their own data
+    if (userId !== req.user.id) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    
     const { weight, bmi, unit } = req.body;
     
     const weights = await readUserData(userId, 'weights');
@@ -139,6 +183,12 @@ app.post('/api/weight/:userId', async (req, res) => {
 app.delete('/api/weight/:userId/:weightId', async (req, res) => {
   try {
     const { userId, weightId } = req.params;
+    
+    // Ensure user can only modify their own data
+    if (userId !== req.user.id) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    
     const weights = await readUserData(userId, 'weights');
     const updatedWeights = weights.filter(weight => weight.id !== weightId);
     await writeUserData(userId, 'weights', updatedWeights);
@@ -153,6 +203,12 @@ app.delete('/api/weight/:userId/:weightId', async (req, res) => {
 app.get('/api/profile/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
+    
+    // Ensure user can only access their own data (or admin can access any)
+    if (userId !== req.user.id && !req.user.isAdmin) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    
     const profile = await readUserData(userId, 'profile');
     res.json(profile.length > 0 ? profile[0] : null);
   } catch (error) {
@@ -165,6 +221,12 @@ app.get('/api/profile/:userId', async (req, res) => {
 app.post('/api/profile/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
+    
+    // Ensure user can only modify their own data
+    if (userId !== req.user.id) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    
     const profileData = {
       ...req.body,
       updatedAt: new Date().toISOString()
@@ -182,6 +244,12 @@ app.post('/api/profile/:userId', async (req, res) => {
 app.post('/api/import/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
+    
+    // Ensure user can only modify their own data
+    if (userId !== req.user.id) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    
     const { fasts, weights, profile } = req.body;
     
     if (fasts && fasts.length > 0) {
@@ -212,6 +280,12 @@ app.post('/api/import/:userId', async (req, res) => {
 app.get('/api/export/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
+    
+    // Ensure user can only access their own data (or admin can access any)
+    if (userId !== req.user.id && !req.user.isAdmin) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    
     const fasts = await readUserData(userId, 'fasts');
     const weights = await readUserData(userId, 'weights');
     const profile = await readUserData(userId, 'profile');
@@ -228,26 +302,16 @@ app.get('/api/export/:userId', async (req, res) => {
   }
 });
 
-// List all users (for admin purposes)
-app.get('/api/users', async (req, res) => {
-  try {
-    const files = await fs.readdir(DATA_DIR);
-    const users = [...new Set(files.map(file => file.split('_')[0]))];
-    res.json(users);
-  } catch (error) {
-    console.error('Error listing users:', error);
-    res.status(500).json({ error: 'Failed to list users' });
-  }
-});
-
 // Initialize server
 const startServer = async () => {
   await ensureDataDir();
+  await userService.initialize();
   
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 FastTrack API Server running on port ${PORT}`);
     console.log(`📁 Data directory: ${DATA_DIR}`);
     console.log(`🏥 Health check: http://localhost:${PORT}/health`);
+    console.log(`🔐 Authentication enabled with persistent sessions`);
   });
 };
 

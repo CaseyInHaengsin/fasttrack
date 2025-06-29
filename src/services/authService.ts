@@ -1,77 +1,57 @@
 import { User, LoginCredentials, RegisterData } from '../types/auth';
 
 class AuthService {
-  private readonly STORAGE_KEY = 'fasttrack_auth';
-  private readonly USERS_KEY = 'fasttrack_users';
+  private readonly API_BASE_URL = '/api/auth';
+  private currentUser: User | null = null;
+  private authToken: string | null = null;
 
-  // Simple password hashing (in production, use bcrypt or similar)
-  private hashPassword(password: string): string {
-    // This is a simple hash for demo purposes
-    // In production, use proper bcrypt or similar
-    let hash = 0;
-    for (let i = 0; i < password.length; i++) {
-      const char = password.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
-      hash = hash & hash; // Convert to 32-bit integer
-    }
-    return Math.abs(hash).toString(36) + password.length.toString(36);
+  constructor() {
+    // Load token from localStorage on initialization
+    this.authToken = localStorage.getItem('fasttrack_token');
+    this.loadCurrentUser();
   }
 
-  private verifyPassword(password: string, hash: string): boolean {
-    return this.hashPassword(password) === hash;
-  }
+  private async loadCurrentUser(): Promise<void> {
+    if (!this.authToken) return;
 
-  private getUsers(): User[] {
-    const users = localStorage.getItem(this.USERS_KEY);
-    if (!users) return [];
-    
     try {
-      return JSON.parse(users).map((user: any) => ({
-        ...user,
-        createdAt: new Date(user.createdAt),
-        lastLogin: user.lastLogin ? new Date(user.lastLogin) : undefined
-      }));
-    } catch {
-      return [];
-    }
-  }
-
-  private saveUsers(users: User[]): void {
-    localStorage.setItem(this.USERS_KEY, JSON.stringify(users));
-  }
-
-  private generateUserId(): string {
-    return 'user_' + Date.now().toString(36) + Math.random().toString(36).substr(2);
-  }
-
-  // Create default admin user if none exists
-  private ensureAdminUser(): void {
-    const users = this.getUsers();
-    const adminExists = users.some(user => user.isAdmin);
-    
-    if (!adminExists) {
-      const adminUser: User = {
-        id: this.generateUserId(),
-        username: 'admin',
-        email: 'admin@fasttrack.local',
-        passwordHash: this.hashPassword('admin123'), // Default admin password
-        isAdmin: true,
-        createdAt: new Date(),
-        preferences: {
-          theme: 'blue',
-          notifications: true,
-          dataRetention: 365
+      const response = await fetch(`${this.API_BASE_URL}/me`, {
+        headers: {
+          'Authorization': `Bearer ${this.authToken}`,
+          'Content-Type': 'application/json'
         }
-      };
-      
-      users.push(adminUser);
-      this.saveUsers(users);
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        this.currentUser = {
+          ...data.user,
+          createdAt: new Date(data.user.createdAt),
+          lastLogin: data.user.lastLogin ? new Date(data.user.lastLogin) : undefined
+        };
+      } else {
+        // Token is invalid, clear it
+        this.clearAuth();
+      }
+    } catch (error) {
+      console.error('Failed to load current user:', error);
+      this.clearAuth();
     }
+  }
+
+  private setAuth(user: User, token: string): void {
+    this.currentUser = user;
+    this.authToken = token;
+    localStorage.setItem('fasttrack_token', token);
+  }
+
+  private clearAuth(): void {
+    this.currentUser = null;
+    this.authToken = null;
+    localStorage.removeItem('fasttrack_token');
   }
 
   async register(data: RegisterData): Promise<User> {
-    this.ensureAdminUser();
-    
     if (data.password !== data.confirmPassword) {
       throw new Error('Passwords do not match');
     }
@@ -80,100 +60,112 @@ class AuthService {
       throw new Error('Password must be at least 6 characters long');
     }
 
-    const users = this.getUsers();
-    
-    // Check if username or email already exists
-    if (users.some(user => user.username.toLowerCase() === data.username.toLowerCase())) {
-      throw new Error('Username already exists');
-    }
-    
-    if (users.some(user => user.email.toLowerCase() === data.email.toLowerCase())) {
-      throw new Error('Email already exists');
+    const response = await fetch(`${this.API_BASE_URL}/register`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(data)
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Registration failed');
     }
 
-    const newUser: User = {
-      id: this.generateUserId(),
-      username: data.username,
-      email: data.email,
-      passwordHash: this.hashPassword(data.password),
-      isAdmin: false,
-      createdAt: new Date(),
-      preferences: {
-        theme: 'blue',
-        notifications: true,
-        dataRetention: 90
-      }
+    const result = await response.json();
+    const user = {
+      ...result.user,
+      createdAt: new Date(result.user.createdAt),
+      lastLogin: result.user.lastLogin ? new Date(result.user.lastLogin) : undefined
     };
 
-    users.push(newUser);
-    this.saveUsers(users);
-
-    // Auto-login after registration
-    this.setCurrentUser(newUser);
-    
-    return newUser;
-  }
-
-  async login(credentials: LoginCredentials): Promise<User> {
-    this.ensureAdminUser();
-    
-    const users = this.getUsers();
-    const user = users.find(u => 
-      u.username.toLowerCase() === credentials.username.toLowerCase()
-    );
-
-    if (!user || !this.verifyPassword(credentials.password, user.passwordHash)) {
-      throw new Error('Invalid username or password');
-    }
-
-    // Update last login
-    user.lastLogin = new Date();
-    this.saveUsers(users);
-    this.setCurrentUser(user);
-
+    this.setAuth(user, result.token);
     return user;
   }
 
-  logout(): void {
-    localStorage.removeItem(this.STORAGE_KEY);
+  async login(credentials: LoginCredentials): Promise<User> {
+    const response = await fetch(`${this.API_BASE_URL}/login`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(credentials)
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Login failed');
+    }
+
+    const result = await response.json();
+    const user = {
+      ...result.user,
+      createdAt: new Date(result.user.createdAt),
+      lastLogin: result.user.lastLogin ? new Date(result.user.lastLogin) : undefined
+    };
+
+    this.setAuth(user, result.token);
+    return user;
+  }
+
+  async logout(): Promise<void> {
+    if (this.authToken) {
+      try {
+        await fetch(`${this.API_BASE_URL}/logout`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${this.authToken}`,
+            'Content-Type': 'application/json'
+          }
+        });
+      } catch (error) {
+        console.error('Logout request failed:', error);
+      }
+    }
+
+    this.clearAuth();
   }
 
   getCurrentUser(): User | null {
-    const userData = localStorage.getItem(this.STORAGE_KEY);
-    if (!userData) return null;
-
-    try {
-      const user = JSON.parse(userData);
-      return {
-        ...user,
-        createdAt: new Date(user.createdAt),
-        lastLogin: user.lastLogin ? new Date(user.lastLogin) : undefined
-      };
-    } catch {
-      return null;
-    }
+    return this.currentUser;
   }
 
-  private setCurrentUser(user: User): void {
-    localStorage.setItem(this.STORAGE_KEY, JSON.stringify(user));
+  getAuthToken(): string | null {
+    return this.authToken;
+  }
+
+  isAuthenticated(): boolean {
+    return this.currentUser !== null && this.authToken !== null;
   }
 
   async updateProfile(updates: Partial<User>): Promise<User> {
-    const currentUser = this.getCurrentUser();
-    if (!currentUser) throw new Error('Not authenticated');
+    if (!this.authToken) {
+      throw new Error('Not authenticated');
+    }
 
-    const users = this.getUsers();
-    const userIndex = users.findIndex(u => u.id === currentUser.id);
-    
-    if (userIndex === -1) throw new Error('User not found');
+    const response = await fetch(`${this.API_BASE_URL}/profile`, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${this.authToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(updates)
+    });
 
-    // Merge updates
-    const updatedUser = { ...users[userIndex], ...updates };
-    users[userIndex] = updatedUser;
-    
-    this.saveUsers(users);
-    this.setCurrentUser(updatedUser);
-    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to update profile');
+    }
+
+    const result = await response.json();
+    const updatedUser = {
+      ...result.user,
+      createdAt: new Date(result.user.createdAt),
+      lastLogin: result.user.lastLogin ? new Date(result.user.lastLogin) : undefined
+    };
+
+    this.currentUser = updatedUser;
     return updatedUser;
   }
 
@@ -182,50 +174,94 @@ class AuthService {
   }
 
   async changePassword(currentPassword: string, newPassword: string): Promise<void> {
-    const currentUser = this.getCurrentUser();
-    if (!currentUser) throw new Error('Not authenticated');
-
-    if (!this.verifyPassword(currentPassword, currentUser.passwordHash)) {
-      throw new Error('Current password is incorrect');
+    if (!this.authToken) {
+      throw new Error('Not authenticated');
     }
 
     if (newPassword.length < 6) {
       throw new Error('New password must be at least 6 characters long');
     }
 
-    await this.updateProfile({ 
-      passwordHash: this.hashPassword(newPassword) 
+    const response = await fetch(`${this.API_BASE_URL}/password`, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${this.authToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        currentPassword,
+        newPassword
+      })
     });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to change password');
+    }
   }
 
   // Admin functions
-  getAllUsers(): User[] {
-    const currentUser = this.getCurrentUser();
-    if (!currentUser?.isAdmin) throw new Error('Admin access required');
-    
-    return this.getUsers();
+  async getAllUsers(): Promise<User[]> {
+    if (!this.authToken) {
+      throw new Error('Not authenticated');
+    }
+
+    const response = await fetch('/api/admin/users', {
+      headers: {
+        'Authorization': `Bearer ${this.authToken}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to fetch users');
+    }
+
+    const users = await response.json();
+    return users.map((user: any) => ({
+      ...user,
+      createdAt: new Date(user.createdAt),
+      lastLogin: user.lastLogin ? new Date(user.lastLogin) : undefined
+    }));
   }
 
   async deleteUser(userId: string): Promise<void> {
-    const currentUser = this.getCurrentUser();
-    if (!currentUser?.isAdmin) throw new Error('Admin access required');
-    
-    const users = this.getUsers();
-    const filteredUsers = users.filter(u => u.id !== userId);
-    this.saveUsers(filteredUsers);
+    if (!this.authToken) {
+      throw new Error('Not authenticated');
+    }
+
+    const response = await fetch(`/api/admin/users/${userId}`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${this.authToken}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to delete user');
+    }
   }
 
   async toggleUserAdmin(userId: string): Promise<void> {
-    const currentUser = this.getCurrentUser();
-    if (!currentUser?.isAdmin) throw new Error('Admin access required');
-    
-    const users = this.getUsers();
-    const userIndex = users.findIndex(u => u.id === userId);
-    
-    if (userIndex === -1) throw new Error('User not found');
-    
-    users[userIndex].isAdmin = !users[userIndex].isAdmin;
-    this.saveUsers(users);
+    if (!this.authToken) {
+      throw new Error('Not authenticated');
+    }
+
+    const response = await fetch(`/api/admin/users/${userId}/admin`, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${this.authToken}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to update user');
+    }
   }
 }
 

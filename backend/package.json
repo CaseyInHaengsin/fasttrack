@@ -1,7 +1,7 @@
 {
   "name": "fasttrack-backend",
   "version": "1.0.0",
-  "description": "FastTrack Backend API for persistent data storage",
+  "description": "FastTrack Backend API with persistent authentication",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

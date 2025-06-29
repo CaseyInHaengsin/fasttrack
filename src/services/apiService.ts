@@ -1,4 +1,6 @@
 // API Service for communicating with the backend
+import { authService } from './authService';
+
 const API_BASE_URL = '/api'; // Use relative URL since we're behind nginx proxy
 
 interface Fast {
@@ -30,17 +32,27 @@ interface UserProfile {
 class ApiService {
   private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     const url = `${API_BASE_URL}${endpoint}`;
+    const token = authService.getAuthToken();
     
     const response = await fetch(url, {
       headers: {
         'Content-Type': 'application/json',
+        ...(token && { 'Authorization': `Bearer ${token}` }),
         ...options.headers,
       },
       ...options,
     });
 
+    if (response.status === 401) {
+      // Token expired or invalid, logout user
+      await authService.logout();
+      window.location.reload();
+      throw new Error('Session expired. Please login again.');
+    }
+
     if (!response.ok) {
-      throw new Error(`API request failed: ${response.status} ${response.statusText}`);
+      const error = await response.json().catch(() => ({ error: 'Request failed' }));
+      throw new Error(error.error || `API request failed: ${response.status} ${response.statusText}`);
     }
 
     return response.json();
