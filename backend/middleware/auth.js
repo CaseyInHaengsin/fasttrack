@@ -1,5 +1,3 @@
-const UserService = require('../services/UserService');
-
 const authMiddleware = (userService) => {
   return async (req, res, next) => {
     try {
@@ -9,13 +7,14 @@ const authMiddleware = (userService) => {
       }
 
       const token = authHeader.substring(7);
-      const user = await userService.getUserByToken(token);
-
+      const user = await userService.validateToken(token);
+      
       if (!user) {
         return res.status(401).json({ error: 'Invalid or expired token' });
       }
 
       req.user = user;
+      req.token = token;
       next();
     } catch (error) {
       console.error('Auth middleware error:', error);

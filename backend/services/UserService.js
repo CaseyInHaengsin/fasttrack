@@ -1,192 +1,227 @@
 const fs = require('fs').promises;
 const path = require('path');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 
 class UserService {
   constructor(dataDir) {
     this.dataDir = dataDir;
     this.usersFile = path.join(dataDir, 'users.json');
+    this.sessionsFile = path.join(dataDir, 'sessions.json');
+    this.jwtSecret = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
     this.users = new Map();
-    this.initialized = false;
+    this.sessions = new Map();
   }
 
   async initialize() {
-    if (this.initialized) return;
-
     try {
-      await fs.access(this.usersFile);
-      const data = await fs.readFile(this.usersFile, 'utf8');
-      const usersData = JSON.parse(data);
-      
-      for (const userData of usersData) {
-        const user = new User(userData);
-        this.users.set(user.id, user);
-      }
-    } catch (error) {
-      // File doesn't exist, create with default admin user
-      await this.createDefaultAdmin();
+      await fs.access(this.dataDir);
+    } catch {
+      await fs.mkdir(this.dataDir, { recursive: true });
     }
 
-    this.initialized = true;
+    await this.loadUsers();
+    await this.loadSessions();
+    await this.createDefaultAdmin();
   }
 
-  async createDefaultAdmin() {
-    const adminUser = new User({
-      id: 'admin_' + Date.now().toString(36),
-      username: 'admin',
-      email: 'admin@fasttrack.local',
-      passwordHash: await User.hashPassword('admin123'),
-      isAdmin: true,
-      preferences: {
-        theme: 'blue',
-        notifications: true,
-        dataRetention: 365
-      }
-    });
-
-    this.users.set(adminUser.id, adminUser);
-    await this.saveUsers();
+  async loadUsers() {
+    try {
+      const data = await fs.readFile(this.usersFile, 'utf8');
+      const usersArray = JSON.parse(data);
+      this.users.clear();
+      usersArray.forEach(userData => {
+        const user = User.fromJSON(userData);
+        this.users.set(user.id, user);
+      });
+      console.log(`📚 Loaded ${this.users.size} users`);
+    } catch (error) {
+      console.log('📚 No existing users file found, starting fresh');
+      this.users.clear();
+    }
   }
 
   async saveUsers() {
-    const usersArray = Array.from(this.users.values()).map(user => user.toJSON());
+    const usersArray = Array.from(this.users.values());
     await fs.writeFile(this.usersFile, JSON.stringify(usersArray, null, 2));
   }
 
-  async createUser(userData) {
-    await this.initialize();
-
-    // Check if username or email already exists
-    for (const user of this.users.values()) {
-      if (user.username.toLowerCase() === userData.username.toLowerCase()) {
-        throw new Error('Username already exists');
-      }
-      if (user.email.toLowerCase() === userData.email.toLowerCase()) {
-        throw new Error('Email already exists');
-      }
+  async loadSessions() {
+    try {
+      const data = await fs.readFile(this.sessionsFile, 'utf8');
+      const sessionsArray = JSON.parse(data);
+      this.sessions.clear();
+      sessionsArray.forEach(session => {
+        this.sessions.set(session.token, session);
+      });
+      console.log(`🔐 Loaded ${this.sessions.size} active sessions`);
+    } catch (error) {
+      console.log('🔐 No existing sessions file found, starting fresh');
+      this.sessions.clear();
     }
-
-    const newUser = new User({
-      id: 'user_' + Date.now().toString(36) + Math.random().toString(36).substr(2, 9),
-      username: userData.username,
-      email: userData.email,
-      passwordHash: await User.hashPassword(userData.password),
-      isAdmin: false,
-      preferences: {
-        theme: 'blue',
-        notifications: true,
-        dataRetention: 90
-      }
-    });
-
-    this.users.set(newUser.id, newUser);
-    await this.saveUsers();
-
-    return newUser;
   }
 
-  async authenticateUser(username, password) {
-    await this.initialize();
+  async saveSessions() {
+    const sessionsArray = Array.from(this.sessions.values());
+    await fs.writeFile(this.sessionsFile, JSON.stringify(sessionsArray, null, 2));
+  }
 
-    const user = Array.from(this.users.values()).find(
-      u => u.username.toLowerCase() === username.toLowerCase()
+  async createDefaultAdmin() {
+    const adminExists = Array.from(this.users.values()).some(user => user.isAdmin);
+    
+    if (!adminExists) {
+      const adminUser = new User({
+        id: 'admin-' + Date.now(),
+        username: 'admin',
+        email: 'admin@fasttrack.local',
+        passwordHash: await bcrypt.hash('admin123', 10),
+        isAdmin: true
+      });
+      
+      this.users.set(adminUser.id, adminUser);
+      await this.saveUsers();
+      console.log('👑 Default admin user created (admin/admin123)');
+    }
+  }
+
+  async register(userData) {
+    const { username, email, password } = userData;
+    
+    // Check if user already exists
+    const existingUser = Array.from(this.users.values()).find(
+      user => user.username === username || user.email === email
     );
-
-    if (!user) {
-      throw new Error('Invalid username or password');
+    
+    if (existingUser) {
+      throw new Error('User already exists');
     }
-
-    const isValid = await User.verifyPassword(password, user.passwordHash);
-    if (!isValid) {
-      throw new Error('Invalid username or password');
-    }
-
-    // Update last login
-    user.lastLogin = new Date();
+    
+    // Create new user
+    const user = new User({
+      id: 'user-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9),
+      username,
+      email,
+      passwordHash: await bcrypt.hash(password, 10),
+      isAdmin: false
+    });
+    
+    this.users.set(user.id, user);
     await this.saveUsers();
-
-    return user;
+    
+    return user.toJSON();
   }
 
-  async getUserById(id) {
-    await this.initialize();
-    return this.users.get(id);
-  }
-
-  async getUserByToken(token) {
-    await this.initialize();
-
-    for (const user of this.users.values()) {
-      if (user.isValidToken(token)) {
-        return user;
-      }
+  async login(credentials) {
+    const { username, password } = credentials;
+    
+    const user = Array.from(this.users.values()).find(
+      u => u.username === username || u.email === username
+    );
+    
+    if (!user || !await bcrypt.compare(password, user.passwordHash)) {
+      throw new Error('Invalid credentials');
     }
-
-    return null;
+    
+    // Update last login
+    user.lastLogin = new Date().toISOString();
+    await this.saveUsers();
+    
+    // Create session
+    const token = jwt.sign(
+      { userId: user.id, username: user.username, isAdmin: user.isAdmin },
+      this.jwtSecret,
+      { expiresIn: '7d' }
+    );
+    
+    const session = {
+      token,
+      userId: user.id,
+      createdAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+    };
+    
+    this.sessions.set(token, session);
+    await this.saveSessions();
+    
+    return { user: user.toJSON(), token };
   }
 
-  async updateUser(id, updates) {
-    await this.initialize();
+  async logout(token) {
+    this.sessions.delete(token);
+    await this.saveSessions();
+  }
 
-    const user = this.users.get(id);
+  async validateToken(token) {
+    try {
+      const session = this.sessions.get(token);
+      if (!session) {
+        return null;
+      }
+      
+      // Check if session is expired
+      if (new Date() > new Date(session.expiresAt)) {
+        this.sessions.delete(token);
+        await this.saveSessions();
+        return null;
+      }
+      
+      const decoded = jwt.verify(token, this.jwtSecret);
+      const user = this.users.get(decoded.userId);
+      
+      return user ? user.toJSON() : null;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  async updateUser(userId, updates) {
+    const user = this.users.get(userId);
     if (!user) {
       throw new Error('User not found');
     }
-
+    
     // Update allowed fields
     if (updates.username) user.username = updates.username;
     if (updates.email) user.email = updates.email;
     if (updates.avatar !== undefined) user.avatar = updates.avatar;
-    if (updates.preferences) user.preferences = { ...user.preferences, ...updates.preferences };
-
-    await this.saveUsers();
-    return user;
-  }
-
-  async changePassword(id, currentPassword, newPassword) {
-    await this.initialize();
-
-    const user = this.users.get(id);
-    if (!user) {
-      throw new Error('User not found');
+    if (updates.password) {
+      user.passwordHash = await bcrypt.hash(updates.password, 10);
     }
-
-    const isValid = await User.verifyPassword(currentPassword, user.passwordHash);
-    if (!isValid) {
-      throw new Error('Current password is incorrect');
-    }
-
-    user.passwordHash = await User.hashPassword(newPassword);
+    
+    user.updatedAt = new Date().toISOString();
     await this.saveUsers();
-  }
-
-  async deleteUser(id) {
-    await this.initialize();
-
-    if (!this.users.has(id)) {
-      throw new Error('User not found');
-    }
-
-    this.users.delete(id);
-    await this.saveUsers();
+    
+    return user.toJSON();
   }
 
   async getAllUsers() {
-    await this.initialize();
-    return Array.from(this.users.values());
+    return Array.from(this.users.values()).map(user => user.toJSON());
   }
 
-  async toggleUserAdmin(id) {
-    await this.initialize();
-
-    const user = this.users.get(id);
-    if (!user) {
-      throw new Error('User not found');
+  async deleteUser(userId) {
+    const deleted = this.users.delete(userId);
+    if (deleted) {
+      await this.saveUsers();
+      
+      // Remove user's sessions
+      const userSessions = Array.from(this.sessions.entries())
+        .filter(([token, session]) => session.userId === userId);
+      
+      userSessions.forEach(([token]) => this.sessions.delete(token));
+      await this.saveSessions();
     }
+    return deleted;
+  }
 
-    user.isAdmin = !user.isAdmin;
-    await this.saveUsers();
-    return user;
+  async getUserStats() {
+    const users = Array.from(this.users.values());
+    return {
+      total: users.length,
+      admins: users.filter(u => u.isAdmin).length,
+      regular: users.filter(u => !u.isAdmin).length,
+      activeSessions: this.sessions.size
+    };
   }
 }
 
