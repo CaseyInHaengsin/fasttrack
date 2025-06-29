@@ -281,12 +281,11 @@ echo '/var/lib/docker/containers/*/*.log {
 # Monitor with cron
 echo "0 */6 * * * /path/to/fasttrack/deploy.sh status > /var/log/fasttrack-status.log" | crontab -
 ```
-![image](https://github.com/user-attachments/assets/95ce99f0-5a3a-4e84-8a8a-c2df68d122d3)
-![image](https://github.com/user-attachments/assets/e52f6cd0-393a-48fc-9783-2bbff47ce838)
-![image](https://github.com/user-attachments/assets/3c463f4f-2ddd-4dc6-a596-e43dd03bb430)
-![image](https://github.com/user-attachments/assets/b4edb70a-ccd6-40ff-8a46-650ddd373a68)
-![image](https://github.com/user-attachments/assets/68933933-93e1-4f5c-b52a-be15df8ce09f)
-![image](https://github.com/user-attachments/assets/35d1c44d-6871-44a2-b455-98a1a362c0fc)
+![image](https://github.com/user-attachments/assets/c7308cd9-2011-4206-a7fb-fa1095f7dd2d)
+![image](https://github.com/user-attachments/assets/6b220b5e-4805-439e-bd05-75432fb1fe10)
+![image](https://github.com/user-attachments/assets/19a4c79c-6035-49d6-9d4e-3be6f4b74aca)
+![image](https://github.com/user-attachments/assets/c9a60bda-f465-41b8-9e6e-33a47a20bc7a)
+![image](https://github.com/user-attachments/assets/26da69e9-7669-415c-ad39-c9e7402dae8d)
 
 
 ## 🤝 Contributing
