@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Card, CardContent } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
-import { Calendar, Eye, EyeOff, LogIn, UserPlus } from 'lucide-react';
+import { Calendar, Eye, EyeOff, LogIn, UserPlus, RefreshCw } from 'lucide-react';
 import { ThemeSelector } from '../ThemeSelector';
 import { LoginCredentials } from '../../types/auth';
 
@@ -28,6 +28,7 @@ export function LoginForm({
     password: ''
   });
   const [showPassword, setShowPassword] = useState(false);
+  const [isRetrying, setIsRetrying] = useState(false);
 
   const isDarkTheme = theme === 'dark' || theme === 'midnight';
 
@@ -58,8 +59,22 @@ export function LoginForm({
     if (!credentials.username.trim() || !credentials.password) {
       return;
     }
+    
+    setIsRetrying(false);
     await onLogin(credentials);
   };
+
+  const handleRetry = async () => {
+    if (!credentials.username.trim() || !credentials.password) {
+      return;
+    }
+    
+    setIsRetrying(true);
+    await onLogin(credentials);
+    setIsRetrying(false);
+  };
+
+  const isFormValid = credentials.username.trim() && credentials.password;
 
   return (
     <div className={`min-h-screen ${backgroundClasses[theme as keyof typeof backgroundClasses]} flex items-center justify-center p-4 relative`}>
@@ -80,7 +95,19 @@ export function LoginForm({
 
           {error && (
             <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
-              <p className="text-red-700 text-sm">{error}</p>
+              <p className="text-red-700 text-sm mb-3">{error}</p>
+              {error.includes('failed') && isFormValid && (
+                <Button
+                  onClick={handleRetry}
+                  variant="outline"
+                  size="sm"
+                  disabled={isLoading || isRetrying}
+                  className="text-red-600 border-red-300 hover:bg-red-50"
+                >
+                  <RefreshCw className={`w-4 h-4 mr-2 ${isRetrying ? 'animate-spin' : ''}`} />
+                  {isRetrying ? 'Retrying...' : 'Retry Login'}
+                </Button>
+              )}
             </div>
           )}
 
@@ -120,7 +147,7 @@ export function LoginForm({
             <Button 
               type="submit" 
               className="w-full py-3 text-lg"
-              disabled={isLoading || !credentials.username.trim() || !credentials.password}
+              disabled={isLoading || !isFormValid}
             >
               <LogIn className="w-5 h-5 mr-2" />
               {isLoading ? 'Signing In...' : 'Sign In'}

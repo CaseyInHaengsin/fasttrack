@@ -5,6 +5,7 @@ class AuthService {
   private currentUser: User | null = null;
   private authToken: string | null = null;
   private initPromise: Promise<void> | null = null;
+  private isInitialized = false;
 
   constructor() {
     // Initialize authentication state
@@ -12,31 +13,34 @@ class AuthService {
   }
 
   private async initialize(): Promise<void> {
-    // Load token from localStorage
-    this.authToken = localStorage.getItem('fasttrack_token');
-    
-    if (this.authToken) {
-      try {
+    try {
+      // Load token from localStorage
+      this.authToken = localStorage.getItem('fasttrack_token');
+      
+      if (this.authToken) {
         // Validate token with server and load user data
         await this.loadCurrentUser();
         console.log('🔑 Authentication restored from stored token');
-      } catch (error) {
-        console.error('Failed to validate stored token:', error);
-        this.clearAuth();
       }
+    } catch (error) {
+      console.error('Failed to validate stored token:', error);
+      this.clearAuth();
+    } finally {
+      this.isInitialized = true;
     }
   }
 
   // Ensure initialization is complete before any operation
   private async ensureInitialized(): Promise<void> {
-    if (this.initPromise) {
+    if (!this.isInitialized && this.initPromise) {
       await this.initPromise;
-      this.initPromise = null;
     }
   }
 
   private async loadCurrentUser(): Promise<void> {
-    if (!this.authToken) return;
+    if (!this.authToken) {
+      throw new Error('No auth token available');
+    }
 
     const response = await fetch(`${this.API_BASE_URL}/me`, {
       headers: {
@@ -53,9 +57,11 @@ class AuthService {
         lastLogin: data.user.lastLogin ? new Date(data.user.lastLogin) : undefined
       };
       console.log(`👤 Loaded user profile: ${this.currentUser.username}`);
+    } else if (response.status === 401) {
+      // Token is invalid or expired
+      throw new Error('Invalid or expired token');
     } else {
-      // Token is invalid, clear it
-      throw new Error('Invalid token');
+      throw new Error(`Failed to load user: ${response.status}`);
     }
   }
 
@@ -76,6 +82,7 @@ class AuthService {
   async register(data: RegisterData): Promise<User> {
     await this.ensureInitialized();
 
+    // Client-side validation
     if (data.password !== data.confirmPassword) {
       throw new Error('Passwords do not match');
     }
@@ -172,6 +179,7 @@ class AuthService {
         console.log('🚪 Logout request sent to server');
       } catch (error) {
         console.error('Logout request failed:', error);
+        // Continue with local logout even if server request fails
       }
     }
 
@@ -180,6 +188,23 @@ class AuthService {
 
   async getCurrentUser(): Promise<User | null> {
     await this.ensureInitialized();
+    
+    // If we have a user but no token, clear the user
+    if (this.currentUser && !this.authToken) {
+      this.currentUser = null;
+    }
+    
+    // If we have a token but no user, try to load the user
+    if (this.authToken && !this.currentUser) {
+      try {
+        await this.loadCurrentUser();
+      } catch (error) {
+        console.error('Failed to load current user:', error);
+        this.clearAuth();
+        return null;
+      }
+    }
+    
     return this.currentUser;
   }
 
@@ -189,7 +214,31 @@ class AuthService {
 
   async isAuthenticated(): Promise<boolean> {
     await this.ensureInitialized();
-    return this.currentUser !== null && this.authToken !== null;
+    
+    if (!this.authToken) {
+      return false;
+    }
+    
+    // Verify token is still valid with server
+    try {
+      const response = await fetch(`${this.API_BASE_URL}/validate`, {
+        headers: {
+          'Authorization': `Bearer ${this.authToken}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (response.ok) {
+        return true;
+      } else {
+        // Token is invalid, clear auth
+        this.clearAuth();
+        return false;
+      }
+    } catch (error) {
+      console.error('Token validation failed:', error);
+      return false;
+    }
   }
 
   async updateProfile(updates: Partial<User>): Promise<User> {
@@ -342,15 +391,19 @@ class AuthService {
       throw new Error('Not authenticated');
     }
 
-    const response = await fetch(`${this.API_BASE_URL}/sessions`, {
-      headers: {
-        'Authorization': `Bearer ${this.authToken}`,
-        'Content-Type': 'application/json'
-      }
-    });
+    try {
+      const response = await fetch(`${this.API_BASE_URL}/sessions`, {
+        headers: {
+          'Authorization': `Bearer ${this.authToken}`,
+          'Content-Type': 'application/json'
+        }
+      });
 
-    if (response.ok) {
-      return response.json();
+      if (response.ok) {
+        return response.json();
+      }
+    } catch (error) {
+      console.error('Failed to fetch sessions:', error);
     }
     
     return [];
@@ -374,6 +427,27 @@ class AuthService {
     if (response.ok) {
       console.log('🚪 All sessions logged out');
       this.clearAuth();
+    } else {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to logout all sessions');
+    }
+  }
+
+  // Force refresh user data from server
+  async refreshUser(): Promise<User | null> {
+    await this.ensureInitialized();
+    
+    if (!this.authToken) {
+      return null;
+    }
+    
+    try {
+      await this.loadCurrentUser();
+      return this.currentUser;
+    } catch (error) {
+      console.error('Failed to refresh user:', error);
+      this.clearAuth();
+      return null;
     }
   }
 }

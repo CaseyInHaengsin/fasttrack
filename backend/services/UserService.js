@@ -27,6 +27,11 @@ class UserService {
     
     // Clean up expired sessions on startup
     await this.cleanupExpiredSessions();
+    
+    // Set up periodic cleanup every hour
+    setInterval(() => {
+      this.cleanupExpiredSessions().catch(console.error);
+    }, 60 * 60 * 1000);
   }
 
   async loadUsers() {
@@ -100,7 +105,7 @@ class UserService {
         id: 'admin-' + Date.now(),
         username: 'admin',
         email: 'admin@fasttrack.local',
-        passwordHash: await bcrypt.hash('admin123', 12), // Increased salt rounds
+        passwordHash: await bcrypt.hash('admin123', 12),
         isAdmin: true
       });
       
@@ -126,7 +131,7 @@ class UserService {
       throw new Error('Password must be at least 6 characters long');
     }
     
-    // Check if user already exists
+    // Check if user already exists (case-insensitive)
     const existingUser = Array.from(this.users.values()).find(
       user => user.username.toLowerCase() === username.toLowerCase() || 
              user.email.toLowerCase() === email.toLowerCase()
@@ -164,6 +169,7 @@ class UserService {
       throw new Error('Username and password are required');
     }
     
+    // Find user by username or email (case-insensitive)
     const user = Array.from(this.users.values()).find(
       u => u.username.toLowerCase() === username.toLowerCase() || 
            u.email.toLowerCase() === username.toLowerCase()
@@ -183,12 +189,13 @@ class UserService {
     await this.saveUsers();
     
     // Create session with extended expiry for cross-device persistence
+    const sessionId = Date.now() + '-' + Math.random().toString(36).substr(2, 9);
     const token = jwt.sign(
       { 
         userId: user.id, 
         username: user.username, 
         isAdmin: user.isAdmin,
-        sessionId: Date.now() + '-' + Math.random().toString(36).substr(2, 9)
+        sessionId: sessionId
       },
       this.jwtSecret,
       { expiresIn: '30d' } // 30 days for better cross-device experience
@@ -196,18 +203,21 @@ class UserService {
     
     const session = {
       token,
+      sessionId,
       userId: user.id,
       username: user.username,
       isAdmin: user.isAdmin,
       createdAt: new Date().toISOString(),
       expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-      lastAccessed: new Date().toISOString()
+      lastAccessed: new Date().toISOString(),
+      userAgent: '',
+      ipAddress: ''
     };
     
     this.sessions.set(token, session);
     await this.saveSessions();
     
-    console.log(`🔑 User logged in: ${user.username} from new session`);
+    console.log(`🔑 User logged in: ${user.username} (session: ${sessionId})`);
     return { user: user.toJSON(), token };
   }
 
@@ -216,7 +226,7 @@ class UserService {
     if (session) {
       this.sessions.delete(token);
       await this.saveSessions();
-      console.log(`🚪 User logged out: ${session.username}`);
+      console.log(`🚪 User logged out: ${session.username} (session: ${session.sessionId})`);
     }
   }
 
@@ -241,11 +251,13 @@ class UserService {
     try {
       const session = this.sessions.get(token);
       if (!session) {
+        console.log('🔍 Token not found in sessions');
         return null;
       }
       
       // Check if session is expired
       if (new Date() > new Date(session.expiresAt)) {
+        console.log('🔍 Session expired, removing');
         this.sessions.delete(token);
         await this.saveSessions();
         return null;
@@ -256,7 +268,7 @@ class UserService {
       const user = this.users.get(decoded.userId);
       
       if (!user) {
-        // User was deleted, remove session
+        console.log('🔍 User not found, removing session');
         this.sessions.delete(token);
         await this.saveSessions();
         return null;
@@ -264,11 +276,11 @@ class UserService {
       
       // Update last accessed time
       session.lastAccessed = new Date().toISOString();
-      await this.saveSessions();
       
+      console.log(`🔍 Token validated for user: ${user.username}`);
       return user.toJSON();
     } catch (error) {
-      // Invalid token, remove from sessions
+      console.log('🔍 Token validation failed:', error.message);
       this.sessions.delete(token);
       await this.saveSessions();
       return null;
@@ -281,7 +293,7 @@ class UserService {
       throw new Error('User not found');
     }
     
-    // Check for username/email conflicts
+    // Check for username/email conflicts (case-insensitive)
     if (updates.username && updates.username !== user.username) {
       const existingUser = Array.from(this.users.values()).find(
         u => u.id !== userId && u.username.toLowerCase() === updates.username.toLowerCase()
@@ -396,10 +408,13 @@ class UserService {
     return Array.from(this.sessions.values())
       .filter(session => session.userId === userId)
       .map(session => ({
+        sessionId: session.sessionId,
         token: session.token.substring(0, 10) + '...',
         createdAt: session.createdAt,
         lastAccessed: session.lastAccessed,
-        expiresAt: session.expiresAt
+        expiresAt: session.expiresAt,
+        userAgent: session.userAgent || 'Unknown',
+        ipAddress: session.ipAddress || 'Unknown'
       }));
   }
 }
