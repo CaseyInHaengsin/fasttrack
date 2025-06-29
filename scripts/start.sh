@@ -18,8 +18,8 @@ if [ ! -f "package.json" ]; then
     exit 1
 fi
 
-# Start backend with proper error handling
-node server.js &
+# Start backend with proper error handling as nginx user
+su -s /bin/sh nginx -c "node server.js" &
 BACKEND_PID=$!
 
 # Wait a moment for backend to start
