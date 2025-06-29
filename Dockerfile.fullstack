@@ -39,7 +39,7 @@ COPY scripts/start.sh /start.sh
 RUN chmod +x /start.sh
 
 # Create data directory with proper permissions
-RUN mkdir -p /data && chown -R nginx:nginx /data
+RUN mkdir -p /data/app_data && chown -R nginx:nginx /data
 
 # Expose ports
 EXPOSE 80 3001

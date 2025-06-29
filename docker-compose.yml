@@ -13,7 +13,7 @@ services:
     restart: unless-stopped
     environment:
       - NODE_ENV=production
-      - DATA_DIR=/data
+      - DATA_DIR=/data/app_data
       - PORT=3001
       - JWT_SECRET=your-production-jwt-secret-change-this
     healthcheck:

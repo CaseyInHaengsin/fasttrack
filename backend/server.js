@@ -9,7 +9,7 @@ const { authMiddleware } = require('./middleware/auth');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
-const DATA_DIR = process.env.DATA_DIR || '/data';
+const DATA_DIR = process.env.DATA_DIR || '/data/app_data';
 
 // Initialize services
 const userService = new UserService(DATA_DIR);
