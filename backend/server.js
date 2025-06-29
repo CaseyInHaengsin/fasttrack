@@ -59,6 +59,100 @@ app.get('/health', (req, res) => {
 // Protected routes (require authentication)
 app.use('/api', authMiddleware(userService));
 
+// Live timer endpoints
+app.get('/api/timer/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    // Ensure user can only access their own timer (or admin can access any)
+    if (userId !== req.user.id && !req.user.isAdmin) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    
+    const timer = await readUserData(userId, 'timer');
+    res.json(timer.length > 0 ? timer[0] : null);
+  } catch (error) {
+    console.error('Error fetching timer:', error);
+    res.status(500).json({ error: 'Failed to fetch timer data' });
+  }
+});
+
+app.post('/api/timer/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    // Ensure user can only modify their own timer
+    if (userId !== req.user.id) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    
+    const { startTime, notes } = req.body;
+    
+    const timerData = {
+      startTime,
+      notes: notes || '',
+      isPaused: false,
+      pausedAt: null,
+      createdAt: new Date().toISOString()
+    };
+    
+    await writeUserData(userId, 'timer', [timerData]);
+    res.json(timerData);
+  } catch (error) {
+    console.error('Error saving timer:', error);
+    res.status(500).json({ error: 'Failed to save timer' });
+  }
+});
+
+app.put('/api/timer/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    // Ensure user can only modify their own timer
+    if (userId !== req.user.id) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    
+    const { isPaused, pausedAt, notes } = req.body;
+    
+    const timer = await readUserData(userId, 'timer');
+    if (timer.length === 0) {
+      return res.status(404).json({ error: 'No active timer found' });
+    }
+    
+    const updatedTimer = {
+      ...timer[0],
+      isPaused: isPaused !== undefined ? isPaused : timer[0].isPaused,
+      pausedAt: pausedAt !== undefined ? pausedAt : timer[0].pausedAt,
+      notes: notes !== undefined ? notes : timer[0].notes,
+      updatedAt: new Date().toISOString()
+    };
+    
+    await writeUserData(userId, 'timer', [updatedTimer]);
+    res.json(updatedTimer);
+  } catch (error) {
+    console.error('Error updating timer:', error);
+    res.status(500).json({ error: 'Failed to update timer' });
+  }
+});
+
+app.delete('/api/timer/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    // Ensure user can only modify their own timer
+    if (userId !== req.user.id) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    
+    await writeUserData(userId, 'timer', []);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting timer:', error);
+    res.status(500).json({ error: 'Failed to delete timer' });
+  }
+});
+
 // Get user's fasting data
 app.get('/api/fasts/:userId', async (req, res) => {
   try {
@@ -106,6 +200,39 @@ app.post('/api/fasts/:userId', async (req, res) => {
   } catch (error) {
     console.error('Error saving fast:', error);
     res.status(500).json({ error: 'Failed to save fast' });
+  }
+});
+
+// Update a fast (for editing notes)
+app.put('/api/fasts/:userId/:fastId', async (req, res) => {
+  try {
+    const { userId, fastId } = req.params;
+    
+    // Ensure user can only modify their own data
+    if (userId !== req.user.id) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    
+    const { notes } = req.body;
+    
+    const fasts = await readUserData(userId, 'fasts');
+    const fastIndex = fasts.findIndex(fast => fast.id === fastId);
+    
+    if (fastIndex === -1) {
+      return res.status(404).json({ error: 'Fast not found' });
+    }
+    
+    fasts[fastIndex] = {
+      ...fasts[fastIndex],
+      notes: notes || '',
+      updatedAt: new Date().toISOString()
+    };
+    
+    await writeUserData(userId, 'fasts', fasts);
+    res.json(fasts[fastIndex]);
+  } catch (error) {
+    console.error('Error updating fast:', error);
+    res.status(500).json({ error: 'Failed to update fast' });
   }
 });
 
@@ -313,6 +440,7 @@ const startServer = async () => {
     console.log(`📁 Data directory: ${DATA_DIR}`);
     console.log(`🏥 Health check: http://localhost:${PORT}/health`);
     console.log(`🔐 Authentication enabled with persistent sessions`);
+    console.log(`⏱️  Live timer persistence enabled`);
   });
 };
 

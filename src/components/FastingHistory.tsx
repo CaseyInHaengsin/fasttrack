@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Card, CardContent } from './ui/Card';
 import { Button } from './ui/Button';
-import { Trash2, Calendar, Clock, FileText, ChevronDown, ChevronUp } from 'lucide-react';
+import { Trash2, Calendar, Clock, FileText, ChevronDown, ChevronUp, Edit3, Save, X } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 
 interface Fast {
@@ -15,12 +15,15 @@ interface Fast {
 interface FastingHistoryProps {
   fasts: Fast[];
   onDeleteFast: (id: string) => void;
+  onUpdateFast: (id: string, updates: Partial<Fast>) => void;
   theme: string;
 }
 
-export function FastingHistory({ fasts, onDeleteFast, theme }: FastingHistoryProps) {
+export function FastingHistory({ fasts, onDeleteFast, onUpdateFast, theme }: FastingHistoryProps) {
   const [showAll, setShowAll] = useState(false);
   const [expandedNotes, setExpandedNotes] = useState<Set<string>>(new Set());
+  const [editingNotes, setEditingNotes] = useState<Set<string>>(new Set());
+  const [editedNotesText, setEditedNotesText] = useState<Record<string, string>>({});
   
   if (fasts.length === 0) {
     return (
@@ -61,6 +64,41 @@ export function FastingHistory({ fasts, onDeleteFast, theme }: FastingHistoryPro
     setExpandedNotes(newExpanded);
   };
 
+  const startEditingNotes = (fastId: string, currentNotes: string) => {
+    const newEditing = new Set(editingNotes);
+    newEditing.add(fastId);
+    setEditingNotes(newEditing);
+    setEditedNotesText(prev => ({ ...prev, [fastId]: currentNotes || '' }));
+  };
+
+  const cancelEditingNotes = (fastId: string) => {
+    const newEditing = new Set(editingNotes);
+    newEditing.delete(fastId);
+    setEditingNotes(newEditing);
+    setEditedNotesText(prev => {
+      const { [fastId]: _, ...rest } = prev;
+      return rest;
+    });
+  };
+
+  const saveEditedNotes = async (fastId: string) => {
+    const newNotes = editedNotesText[fastId] || '';
+    try {
+      await onUpdateFast(fastId, { notes: newNotes });
+      
+      const newEditing = new Set(editingNotes);
+      newEditing.delete(fastId);
+      setEditingNotes(newEditing);
+      setEditedNotesText(prev => {
+        const { [fastId]: _, ...rest } = prev;
+        return rest;
+      });
+    } catch (error) {
+      console.error('Failed to save notes:', error);
+      alert('Failed to save notes. Please try again.');
+    }
+  };
+
   const truncateText = (text: string, maxLength: number = 100) => {
     if (text.length <= maxLength) return text;
     return text.substring(0, maxLength) + '...';
@@ -81,8 +119,10 @@ export function FastingHistory({ fasts, onDeleteFast, theme }: FastingHistoryPro
         <div className="space-y-3">
           {displayedFasts.map((fast) => {
             const isExpanded = expandedNotes.has(fast.id);
+            const isEditing = editingNotes.has(fast.id);
             const hasNotes = fast.notes && fast.notes.trim().length > 0;
-            const shouldShowExpand = hasNotes && fast.notes!.length > 100;
+            const shouldShowExpand = hasNotes && fast.notes!.length > 100 && !isEditing;
+            const currentNotes = isEditing ? editedNotesText[fast.id] || '' : fast.notes || '';
             
             return (
               <div
@@ -118,7 +158,7 @@ export function FastingHistory({ fasts, onDeleteFast, theme }: FastingHistoryPro
                   </div>
                   
                   <div className="flex items-center space-x-2">
-                    {hasNotes && (
+                    {(hasNotes || isEditing) && (
                       <Button
                         variant="ghost"
                         size="sm"
@@ -141,34 +181,99 @@ export function FastingHistory({ fasts, onDeleteFast, theme }: FastingHistoryPro
                 </div>
                 
                 {/* Notes section */}
-                {hasNotes && (
+                {(hasNotes || isEditing || isExpanded) && (
                   <div className={`mt-4 pt-4 border-t ${isDarkTheme ? 'border-gray-600' : 'border-gray-200'}`}>
                     <div className="flex items-start space-x-2">
                       <FileText className={`w-4 h-4 mt-1 flex-shrink-0 ${isDarkTheme ? 'text-gray-400' : 'text-gray-500'}`} />
                       <div className="flex-1">
-                        <p className={`text-sm ${isDarkTheme ? 'text-gray-300' : 'text-gray-700'} leading-relaxed`}>
-                          {isExpanded || !shouldShowExpand ? fast.notes : truncateText(fast.notes!, 100)}
-                        </p>
-                        
-                        {shouldShowExpand && (
-                          <button
-                            onClick={() => toggleNoteExpansion(fast.id)}
-                            className={`mt-2 text-xs font-medium flex items-center space-x-1 ${
-                              isDarkTheme ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700'
-                            }`}
-                          >
-                            {isExpanded ? (
-                              <>
-                                <ChevronUp className="w-3 h-3" />
-                                <span>Show less</span>
-                              </>
+                        {isEditing ? (
+                          <div className="space-y-3">
+                            <textarea
+                              value={currentNotes}
+                              onChange={(e) => setEditedNotesText(prev => ({ ...prev, [fast.id]: e.target.value }))}
+                              placeholder="Add notes about this fast..."
+                              className={`w-full h-24 p-3 border rounded-lg resize-none ${
+                                isDarkTheme 
+                                  ? 'bg-gray-600 border-gray-500 text-white placeholder-gray-400' 
+                                  : 'bg-white border-gray-300 text-gray-800 placeholder-gray-500'
+                              } focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500`}
+                            />
+                            <div className="flex space-x-2">
+                              <Button
+                                size="sm"
+                                onClick={() => saveEditedNotes(fast.id)}
+                                className="bg-green-600 hover:bg-green-700 text-white"
+                              >
+                                <Save className="w-3 h-3 mr-1" />
+                                Save
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => cancelEditingNotes(fast.id)}
+                                className={isDarkTheme ? 'border-gray-600 text-gray-300 hover:bg-gray-600' : ''}
+                              >
+                                <X className="w-3 h-3 mr-1" />
+                                Cancel
+                              </Button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div>
+                            {hasNotes ? (
+                              <div>
+                                <div className="flex items-start justify-between">
+                                  <p className={`text-sm ${isDarkTheme ? 'text-gray-300' : 'text-gray-700'} leading-relaxed flex-1 mr-2`}>
+                                    {isExpanded || !shouldShowExpand ? fast.notes : truncateText(fast.notes!, 100)}
+                                  </p>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => startEditingNotes(fast.id, fast.notes || '')}
+                                    className={`${isDarkTheme ? 'text-gray-400 hover:text-gray-300' : 'text-gray-500 hover:text-gray-700'} flex-shrink-0`}
+                                  >
+                                    <Edit3 className="w-3 h-3" />
+                                  </Button>
+                                </div>
+                                
+                                {shouldShowExpand && (
+                                  <button
+                                    onClick={() => toggleNoteExpansion(fast.id)}
+                                    className={`mt-2 text-xs font-medium flex items-center space-x-1 ${
+                                      isDarkTheme ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700'
+                                    }`}
+                                  >
+                                    {isExpanded ? (
+                                      <>
+                                        <ChevronUp className="w-3 h-3" />
+                                        <span>Show less</span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <ChevronDown className="w-3 h-3" />
+                                        <span>Show more</span>
+                                      </>
+                                    )}
+                                  </button>
+                                )}
+                              </div>
                             ) : (
-                              <>
-                                <ChevronDown className="w-3 h-3" />
-                                <span>Show more</span>
-                              </>
+                              <div className="flex items-center justify-between">
+                                <p className={`text-sm italic ${isDarkTheme ? 'text-gray-500' : 'text-gray-400'}`}>
+                                  No notes for this fast
+                                </p>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => startEditingNotes(fast.id, '')}
+                                  className={`${isDarkTheme ? 'text-gray-400 hover:text-gray-300' : 'text-gray-500 hover:text-gray-700'}`}
+                                >
+                                  <Edit3 className="w-3 h-3 mr-1" />
+                                  Add notes
+                                </Button>
+                              </div>
                             )}
-                          </button>
+                          </div>
                         )}
                       </div>
                     </div>

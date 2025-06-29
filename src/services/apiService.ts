@@ -30,6 +30,15 @@ interface UserProfile {
   activityLevel: 'sedentary' | 'light' | 'moderate' | 'active' | 'very_active';
 }
 
+interface TimerData {
+  startTime: string;
+  notes: string;
+  isPaused: boolean;
+  pausedAt: string | null;
+  createdAt: string;
+  updatedAt?: string;
+}
+
 class ApiService {
   private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     const url = `${API_BASE_URL}${endpoint}`;
@@ -59,6 +68,34 @@ class ApiService {
     return response.json();
   }
 
+  // Timer methods
+  async getTimer(userId: string): Promise<TimerData | null> {
+    return this.request<TimerData | null>(`/timer/${userId}`);
+  }
+
+  async startTimer(userId: string, startTime: Date, notes: string = ''): Promise<TimerData> {
+    return this.request<TimerData>(`/timer/${userId}`, {
+      method: 'POST',
+      body: JSON.stringify({
+        startTime: startTime.toISOString(),
+        notes
+      })
+    });
+  }
+
+  async updateTimer(userId: string, updates: Partial<TimerData>): Promise<TimerData> {
+    return this.request<TimerData>(`/timer/${userId}`, {
+      method: 'PUT',
+      body: JSON.stringify(updates)
+    });
+  }
+
+  async deleteTimer(userId: string): Promise<void> {
+    await this.request(`/timer/${userId}`, {
+      method: 'DELETE'
+    });
+  }
+
   // Fasting data methods
   async getFasts(userId: string): Promise<Fast[]> {
     const fasts = await this.request<any[]>(`/fasts/${userId}`);
@@ -84,6 +121,19 @@ class ApiService {
       ...savedFast,
       startTime: new Date(savedFast.startTime),
       endTime: new Date(savedFast.endTime)
+    };
+  }
+
+  async updateFast(userId: string, fastId: string, updates: Partial<Fast>): Promise<Fast> {
+    const updatedFast = await this.request<any>(`/fasts/${userId}/${fastId}`, {
+      method: 'PUT',
+      body: JSON.stringify(updates)
+    });
+
+    return {
+      ...updatedFast,
+      startTime: new Date(updatedFast.startTime),
+      endTime: new Date(updatedFast.endTime)
     };
   }
 

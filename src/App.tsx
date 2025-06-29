@@ -161,6 +161,25 @@ function App() {
     }
   };
 
+  const handleUpdateFast = async (id: string, updates: Partial<Fast>) => {
+    if (!user) return;
+
+    try {
+      setIsLoading(true);
+      setError(null);
+      
+      const updatedFast = await apiService.updateFast(user.id, id, updates);
+      setFasts(prevFasts => prevFasts.map(fast => 
+        fast.id === id ? updatedFast : fast
+      ));
+    } catch (error) {
+      console.error('Failed to update fast:', error);
+      setError('Failed to update fast. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleImportFasts = (importedFasts: Fast[]) => {
     setFasts(importedFasts);
   };
@@ -340,7 +359,7 @@ function App() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {activeTab === 'calendar' && (
           <div className="space-y-8">
-            <CalendarFastEntry onAddFast={handleAddFast} theme={theme} />
+            <CalendarFastEntry onAddFast={handleAddFast} theme={theme} userId={user.id} />
             {fasts.length > 0 && <FastingStats fasts={fasts} theme={theme} />}
           </div>
         )}
@@ -353,7 +372,12 @@ function App() {
         )}
 
         {activeTab === 'history' && (
-          <FastingHistory fasts={fasts} onDeleteFast={handleDeleteFast} theme={theme} />
+          <FastingHistory 
+            fasts={fasts} 
+            onDeleteFast={handleDeleteFast} 
+            onUpdateFast={handleUpdateFast}
+            theme={theme} 
+          />
         )}
 
         {activeTab === 'health' && (

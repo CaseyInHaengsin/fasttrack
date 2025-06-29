@@ -5,14 +5,16 @@ import { Input } from './ui/Input';
 import { Calendar, Clock, Plus, Play, Pause, Square, Timer } from 'lucide-react';
 import { DayPicker } from 'react-day-picker';
 import { format, differenceInHours, differenceInMinutes, differenceInSeconds } from 'date-fns';
+import { apiService } from '../services/apiService';
 import 'react-day-picker/dist/style.css';
 
 interface CalendarFastEntryProps {
   onAddFast: (startTime: Date, endTime: Date, notes?: string) => void;
   theme: string;
+  userId: string;
 }
 
-export function CalendarFastEntry({ onAddFast, theme }: CalendarFastEntryProps) {
+export function CalendarFastEntry({ onAddFast, theme, userId }: CalendarFastEntryProps) {
   // Manual entry state
   const [startDate, setStartDate] = useState<Date>(new Date());
   const [endDate, setEndDate] = useState<Date>(new Date());
@@ -27,23 +29,13 @@ export function CalendarFastEntry({ onAddFast, theme }: CalendarFastEntryProps) 
   const [timerStartTime, setTimerStartTime] = useState<Date | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
+  const [timerNotes, setTimerNotes] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
-  // Check for existing timer on mount
+  // Load timer state from backend on mount
   useEffect(() => {
-    const savedStartTime = localStorage.getItem('fasttrack_timer_start');
-    const savedPaused = localStorage.getItem('fasttrack_timer_paused');
-    
-    if (savedStartTime) {
-      const startTime = new Date(savedStartTime);
-      setTimerStartTime(startTime);
-      setIsTimerActive(true);
-      setIsPaused(savedPaused === 'true');
-      
-      if (savedPaused !== 'true') {
-        setElapsedSeconds(differenceInSeconds(new Date(), startTime));
-      }
-    }
-  }, []);
+    loadTimerFromBackend();
+  }, [userId]);
 
   // Timer effect
   useEffect(() => {
@@ -57,6 +49,33 @@ export function CalendarFastEntry({ onAddFast, theme }: CalendarFastEntryProps) 
 
     return () => clearInterval(interval);
   }, [isTimerActive, timerStartTime, isPaused]);
+
+  const loadTimerFromBackend = async () => {
+    try {
+      setIsLoading(true);
+      const timerData = await apiService.getTimer(userId);
+      
+      if (timerData) {
+        const startTime = new Date(timerData.startTime);
+        setTimerStartTime(startTime);
+        setIsTimerActive(true);
+        setIsPaused(timerData.isPaused);
+        setTimerNotes(timerData.notes || '');
+        
+        if (!timerData.isPaused) {
+          setElapsedSeconds(differenceInSeconds(new Date(), startTime));
+        } else if (timerData.pausedAt) {
+          setElapsedSeconds(differenceInSeconds(new Date(timerData.pausedAt), startTime));
+        }
+        
+        console.log('🔄 Timer state loaded from backend');
+      }
+    } catch (error) {
+      console.error('Failed to load timer from backend:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const formatTime = (hour: number) => {
     return `${hour.toString().padStart(2, '0')}:00`;
@@ -89,39 +108,106 @@ export function CalendarFastEntry({ onAddFast, theme }: CalendarFastEntryProps) 
   const duration = calculateDuration();
 
   // Timer functions
-  const handleStartTimer = () => {
-    const now = new Date();
-    setTimerStartTime(now);
-    setIsTimerActive(true);
-    setIsPaused(false);
-    setElapsedSeconds(0);
-    localStorage.setItem('fasttrack_timer_start', now.toISOString());
-    localStorage.removeItem('fasttrack_timer_paused');
-  };
-
-  const handlePauseTimer = () => {
-    setIsPaused(true);
-    localStorage.setItem('fasttrack_timer_paused', 'true');
-  };
-
-  const handleResumeTimer = () => {
-    setIsPaused(false);
-    localStorage.removeItem('fasttrack_timer_paused');
-  };
-
-  const handleStopTimer = () => {
-    if (timerStartTime) {
-      const endTime = new Date();
-      onAddFast(timerStartTime, endTime, notes);
+  const handleStartTimer = async () => {
+    try {
+      setIsLoading(true);
+      const now = new Date();
       
-      // Reset timer
-      setIsTimerActive(false);
-      setTimerStartTime(null);
-      setElapsedSeconds(0);
+      await apiService.startTimer(userId, now, timerNotes);
+      
+      setTimerStartTime(now);
+      setIsTimerActive(true);
       setIsPaused(false);
-      setNotes('');
-      localStorage.removeItem('fasttrack_timer_start');
-      localStorage.removeItem('fasttrack_timer_paused');
+      setElapsedSeconds(0);
+      
+      console.log('⏱️ Timer started and saved to backend');
+    } catch (error) {
+      console.error('Failed to start timer:', error);
+      alert('Failed to start timer. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handlePauseTimer = async () => {
+    try {
+      setIsLoading(true);
+      const pausedAt = new Date();
+      
+      await apiService.updateTimer(userId, {
+        isPaused: true,
+        pausedAt: pausedAt.toISOString(),
+        notes: timerNotes
+      });
+      
+      setIsPaused(true);
+      console.log('⏸️ Timer paused and saved to backend');
+    } catch (error) {
+      console.error('Failed to pause timer:', error);
+      alert('Failed to pause timer. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleResumeTimer = async () => {
+    try {
+      setIsLoading(true);
+      
+      await apiService.updateTimer(userId, {
+        isPaused: false,
+        pausedAt: null,
+        notes: timerNotes
+      });
+      
+      setIsPaused(false);
+      console.log('▶️ Timer resumed and saved to backend');
+    } catch (error) {
+      console.error('Failed to resume timer:', error);
+      alert('Failed to resume timer. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleStopTimer = async () => {
+    if (timerStartTime) {
+      try {
+        setIsLoading(true);
+        const endTime = new Date();
+        
+        // Save the fast
+        await onAddFast(timerStartTime, endTime, timerNotes);
+        
+        // Delete timer from backend
+        await apiService.deleteTimer(userId);
+        
+        // Reset timer state
+        setIsTimerActive(false);
+        setTimerStartTime(null);
+        setElapsedSeconds(0);
+        setIsPaused(false);
+        setTimerNotes('');
+        
+        console.log('⏹️ Timer stopped and fast saved');
+      } catch (error) {
+        console.error('Failed to stop timer:', error);
+        alert('Failed to stop timer. Please try again.');
+      } finally {
+        setIsLoading(false);
+      }
+    }
+  };
+
+  const handleUpdateTimerNotes = async (newNotes: string) => {
+    setTimerNotes(newNotes);
+    
+    if (isTimerActive) {
+      try {
+        await apiService.updateTimer(userId, { notes: newNotes });
+      } catch (error) {
+        console.error('Failed to update timer notes:', error);
+      }
     }
   };
 
@@ -193,6 +279,11 @@ export function CalendarFastEntry({ onAddFast, theme }: CalendarFastEntryProps) 
           <div className="flex items-center mb-6">
             <Timer className={`w-6 h-6 ${iconColors[theme as keyof typeof iconColors]} mr-3`} />
             <h3 className={`text-xl font-bold ${isDarkTheme ? 'text-white' : 'text-gray-800'}`}>Live Fasting Timer</h3>
+            {isLoading && (
+              <div className={`ml-auto text-sm ${isDarkTheme ? 'text-gray-400' : 'text-gray-500'}`}>
+                Syncing...
+              </div>
+            )}
           </div>
 
           <div className={`rounded-xl p-8 shadow-sm border ${sectionClasses[theme as keyof typeof sectionClasses]} text-center`}>
@@ -202,14 +293,15 @@ export function CalendarFastEntry({ onAddFast, theme }: CalendarFastEntryProps) 
                   00:00:00
                 </div>
                 <p className={`mb-6 ${isDarkTheme ? 'text-gray-300' : 'text-gray-600'}`}>
-                  Start your fast now and track it in real-time
+                  Start your fast now and track it in real-time across all devices
                 </p>
                 <Button 
                   onClick={handleStartTimer}
+                  disabled={isLoading}
                   className="px-8 py-3 text-lg bg-green-600 hover:bg-green-700"
                 >
                   <Play className="w-5 h-5 mr-2" />
-                  Start Fast Now
+                  {isLoading ? 'Starting...' : 'Start Fast Now'}
                 </Button>
               </div>
             ) : (
@@ -226,28 +318,31 @@ export function CalendarFastEntry({ onAddFast, theme }: CalendarFastEntryProps) 
                   {!isPaused ? (
                     <Button 
                       onClick={handlePauseTimer}
+                      disabled={isLoading}
                       variant="secondary"
                       className="px-6 py-2"
                     >
                       <Pause className="w-4 h-4 mr-2" />
-                      Pause
+                      {isLoading ? 'Pausing...' : 'Pause'}
                     </Button>
                   ) : (
                     <Button 
                       onClick={handleResumeTimer}
+                      disabled={isLoading}
                       className="px-6 py-2 bg-green-600 hover:bg-green-700"
                     >
                       <Play className="w-4 h-4 mr-2" />
-                      Resume
+                      {isLoading ? 'Resuming...' : 'Resume'}
                     </Button>
                   )}
                   
                   <Button 
                     onClick={handleStopTimer}
+                    disabled={isLoading}
                     className="px-6 py-2 bg-red-600 hover:bg-red-700"
                   >
                     <Square className="w-4 h-4 mr-2" />
-                    Stop Fast
+                    {isLoading ? 'Stopping...' : 'Stop Fast'}
                   </Button>
                 </div>
               </div>
@@ -261,8 +356,8 @@ export function CalendarFastEntry({ onAddFast, theme }: CalendarFastEntryProps) 
                 Fast Notes
               </h4>
               <textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
+                value={timerNotes}
+                onChange={(e) => handleUpdateTimerNotes(e.target.value)}
                 placeholder="How are you feeling? What's motivating you? Any observations..."
                 className={`w-full h-24 p-3 border rounded-lg resize-none ${
                   isDarkTheme 
@@ -271,7 +366,7 @@ export function CalendarFastEntry({ onAddFast, theme }: CalendarFastEntryProps) 
                 } focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500`}
               />
               <p className={`text-sm mt-2 ${isDarkTheme ? 'text-gray-400' : 'text-gray-500'}`}>
-                Notes will be saved when you stop the fast
+                Notes are automatically saved and will be included when you stop the fast
               </p>
             </div>
           )}
