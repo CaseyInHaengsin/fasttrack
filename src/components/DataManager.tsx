@@ -4,6 +4,7 @@ import { Button } from './ui/Button';
 import { Download, Upload, FileText, AlertCircle, CheckCircle } from 'lucide-react';
 import Papa from 'papaparse';
 import { format } from 'date-fns';
+import { apiService } from '../services/apiService';
 
 interface Fast {
   id: string;
@@ -33,22 +34,25 @@ export function DataManager({ fasts, onImportFasts, theme, user }: DataManagerPr
     type: 'success' | 'error' | null;
     message: string;
   }>({ type: null, message: '' });
+  const [isLoading, setIsLoading] = useState(false);
 
-  // Load weight entries and health profile from localStorage
-  const getWeightEntries = (): WeightEntry[] => {
-    const savedWeights = localStorage.getItem(`weightEntries_${user}`);
-    if (savedWeights) {
-      return JSON.parse(savedWeights).map((entry: any) => ({
-        ...entry,
-        date: new Date(entry.date)
-      }));
+  // Load weight entries and health profile from API
+  const getWeightEntries = async (): Promise<WeightEntry[]> => {
+    try {
+      return await apiService.getWeights(user);
+    } catch (error) {
+      console.error('Failed to load weights from API:', error);
+      return [];
     }
-    return [];
   };
 
-  const getHealthProfile = () => {
-    const savedProfile = localStorage.getItem(`healthProfile_${user}`);
-    return savedProfile ? JSON.parse(savedProfile) : null;
+  const getHealthProfile = async () => {
+    try {
+      return await apiService.getProfile(user);
+    } catch (error) {
+      console.error('Failed to load profile from API:', error);
+      return null;
+    }
   };
 
   // Calculate calories for fasts
@@ -72,7 +76,7 @@ export function DataManager({ fasts, onImportFasts, theme, user }: DataManagerPr
     return duration * hourlyBurn * fastingMultiplier;
   };
 
-  const handleExport = () => {
+  const handleExport = async () => {
     if (fasts.length === 0) {
       setImportStatus({
         type: 'error',
@@ -81,71 +85,82 @@ export function DataManager({ fasts, onImportFasts, theme, user }: DataManagerPr
       return;
     }
 
-    const weightEntries = getWeightEntries();
-    const healthProfile = getHealthProfile();
+    try {
+      setIsLoading(true);
+      const weightEntries = await getWeightEntries();
+      const healthProfile = await getHealthProfile();
 
-    // Prepare fasting data with calories
-    const fastingData = fasts.map(fast => {
-      const calories = calculateFastingCalories(fast.duration, healthProfile);
-      return {
-        type: 'fast',
-        id: fast.id,
-        startTime: fast.startTime.toISOString(),
-        endTime: fast.endTime.toISOString(),
-        duration: fast.duration,
-        startDate: format(fast.startTime, 'yyyy-MM-dd'),
-        startHour: format(fast.startTime, 'HH:mm'),
-        endDate: format(fast.endTime, 'yyyy-MM-dd'),
-        endHour: format(fast.endTime, 'HH:mm'),
-        durationHours: Math.round(fast.duration),
-        caloriesBurned: Math.round(calories),
-        // Weight data (empty for fasting records)
-        weight: '',
-        bmi: '',
-        weightUnit: ''
-      };
-    });
-
-    // Prepare weight data
-    const weightData = weightEntries.map(entry => ({
-      type: 'weight',
-      id: entry.id,
-      startTime: '',
-      endTime: '',
-      duration: '',
-      startDate: format(entry.date, 'yyyy-MM-dd'),
-      startHour: '',
-      endDate: '',
-      endHour: '',
-      durationHours: '',
-      caloriesBurned: '',
-      // Weight data
-      weight: entry.weight,
-      bmi: entry.bmi.toFixed(2),
-      weightUnit: entry.unit,
-      weightDate: entry.date.toISOString()
-    }));
-
-    // Combine all data
-    const allData = [...fastingData, ...weightData];
-
-    const csv = Papa.unparse(allData);
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    
-    if (link.download !== undefined) {
-      const url = URL.createObjectURL(blob);
-      link.setAttribute('href', url);
-      link.setAttribute('download', `fasttrack-complete-${user}-${format(new Date(), 'yyyy-MM-dd')}.csv`);
-      link.style.visibility = 'hidden';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      
-      setImportStatus({
-        type: 'success',
-        message: `Successfully exported ${fasts.length} fasting records and ${weightEntries.length} weight entries`
+      // Prepare fasting data with calories
+      const fastingData = fasts.map(fast => {
+        const calories = calculateFastingCalories(fast.duration, healthProfile);
+        return {
+          type: 'fast',
+          id: fast.id,
+          startTime: fast.startTime.toISOString(),
+          endTime: fast.endTime.toISOString(),
+          duration: fast.duration,
+          startDate: format(fast.startTime, 'yyyy-MM-dd'),
+          startHour: format(fast.startTime, 'HH:mm'),
+          endDate: format(fast.endTime, 'yyyy-MM-dd'),
+          endHour: format(fast.endTime, 'HH:mm'),
+          durationHours: Math.round(fast.duration),
+          caloriesBurned: Math.round(calories),
+          // Weight data (empty for fasting records)
+          weight: '',
+          bmi: '',
+          weightUnit: ''
+        };
       });
+
+      // Prepare weight data
+      const weightData = weightEntries.map(entry => ({
+        type: 'weight',
+        id: entry.id,
+        startTime: '',
+        endTime: '',
+        duration: '',
+        startDate: format(entry.date, 'yyyy-MM-dd'),
+        startHour: '',
+        endDate: '',
+        endHour: '',
+        durationHours: '',
+        caloriesBurned: '',
+        // Weight data
+        weight: entry.weight,
+        bmi: entry.bmi.toFixed(2),
+        weightUnit: entry.unit,
+        weightDate: entry.date.toISOString()
+      }));
+
+      // Combine all data
+      const allData = [...fastingData, ...weightData];
+
+      const csv = Papa.unparse(allData);
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      
+      if (link.download !== undefined) {
+        const url = URL.createObjectURL(blob);
+        link.setAttribute('href', url);
+        link.setAttribute('download', `fasttrack-complete-${user}-${format(new Date(), 'yyyy-MM-dd')}.csv`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        setImportStatus({
+          type: 'success',
+          message: `Successfully exported ${fasts.length} fasting records and ${weightEntries.length} weight entries`
+        });
+      }
+    } catch (error) {
+      console.error('Export error:', error);
+      setImportStatus({
+        type: 'error',
+        message: 'Failed to export data. Please try again.'
+      });
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -161,9 +176,11 @@ export function DataManager({ fasts, onImportFasts, theme, user }: DataManagerPr
       return;
     }
 
+    setIsLoading(true);
+
     Papa.parse(file, {
       header: true,
-      complete: (results) => {
+      complete: async (results) => {
         try {
           const importedFasts: Fast[] = [];
           const importedWeights: WeightEntry[] = [];
@@ -231,60 +248,37 @@ export function DataManager({ fasts, onImportFasts, theme, user }: DataManagerPr
             }
           });
 
-          // Import fasting data
-          if (importedFasts.length > 0) {
-            const existingFasts = new Set(
-              fasts.map(f => `${f.startTime.getTime()}-${f.duration}`)
-            );
-            
-            const newFasts = importedFasts.filter(
-              f => !existingFasts.has(`${f.startTime.getTime()}-${f.duration}`)
-            );
+          // Import data via API
+          if (importedFasts.length > 0 || importedWeights.length > 0) {
+            try {
+              await apiService.importData(user, {
+                fasts: importedFasts,
+                weights: importedWeights
+              });
 
-            if (newFasts.length > 0) {
-              onImportFasts([...fasts, ...newFasts]);
+              setImportStatus({
+                type: 'success',
+                message: `Successfully imported ${importedFasts.length} fasting records and ${importedWeights.length} weight entries${errors.length > 0 ? ` (${errors.length} errors)` : ''}`
+              });
+
+              // Refresh the page to show updated data
+              window.location.reload();
+            } catch (error) {
+              throw new Error('Failed to save imported data to server');
             }
-          }
-
-          // Import weight data
-          if (importedWeights.length > 0) {
-            const existingWeights = getWeightEntries();
-            const existingWeightSet = new Set(
-              existingWeights.map(w => `${w.date.getTime()}-${w.weight}`)
-            );
-            
-            const newWeights = importedWeights.filter(
-              w => !existingWeightSet.has(`${w.date.getTime()}-${w.weight}`)
-            );
-
-            if (newWeights.length > 0) {
-              const allWeights = [...existingWeights, ...newWeights].sort((a, b) => b.date.getTime() - a.date.getTime());
-              localStorage.setItem(`weightEntries_${user}`, JSON.stringify(allWeights));
-            }
-          }
-
-          const totalImported = importedFasts.length + importedWeights.length;
-          if (totalImported === 0) {
+          } else {
             setImportStatus({
               type: 'error',
               message: `No valid records found. Errors: ${errors.slice(0, 3).join(', ')}`
             });
-            return;
           }
-
-          setImportStatus({
-            type: 'success',
-            message: `Successfully imported ${importedFasts.length} fasting records and ${importedWeights.length} weight entries${errors.length > 0 ? ` (${errors.length} errors)` : ''}`
-          });
-
-          // Refresh the page to show updated data
-          window.location.reload();
-
         } catch (error) {
           setImportStatus({
             type: 'error',
             message: `Import failed: ${error instanceof Error ? error.message : 'Unknown error'}`
           });
+        } finally {
+          setIsLoading(false);
         }
       },
       error: (error) => {
@@ -292,6 +286,7 @@ export function DataManager({ fasts, onImportFasts, theme, user }: DataManagerPr
           type: 'error',
           message: `Failed to parse CSV: ${error.message}`
         });
+        setIsLoading(false);
       }
     });
 
@@ -322,7 +317,6 @@ export function DataManager({ fasts, onImportFasts, theme, user }: DataManagerPr
   };
 
   const isDarkTheme = theme === 'dark' || theme === 'midnight';
-  const weightEntries = getWeightEntries();
 
   return (
     <Card className={`bg-gradient-to-br ${themeClasses[theme as keyof typeof themeClasses]}`}>
@@ -330,6 +324,11 @@ export function DataManager({ fasts, onImportFasts, theme, user }: DataManagerPr
         <div className="flex items-center mb-6">
           <FileText className={`w-6 h-6 mr-3 ${isDarkTheme ? 'text-white' : 'text-gray-800'}`} />
           <h2 className={`text-xl font-bold ${isDarkTheme ? 'text-white' : 'text-gray-800'}`}>Data Management</h2>
+          {isLoading && (
+            <div className={`ml-auto text-sm ${isDarkTheme ? 'text-gray-400' : 'text-gray-500'}`}>
+              Processing...
+            </div>
+          )}
         </div>
 
         <div className="space-y-4">
@@ -348,10 +347,10 @@ export function DataManager({ fasts, onImportFasts, theme, user }: DataManagerPr
             <Button
               onClick={handleExport}
               className="flex items-center"
-              disabled={fasts.length === 0 && weightEntries.length === 0}
+              disabled={fasts.length === 0 || isLoading}
             >
               <Download className="w-4 h-4 mr-2" />
-              Export Complete Data ({fasts.length} fasts, {weightEntries.length} weights)
+              {isLoading ? 'Exporting...' : `Export Complete Data (${fasts.length} fasts)`}
             </Button>
           </div>
 
@@ -359,7 +358,7 @@ export function DataManager({ fasts, onImportFasts, theme, user }: DataManagerPr
           <div className={`${isDarkTheme ? 'bg-gray-700/90' : 'bg-white/90'} backdrop-blur-sm rounded-lg p-6 shadow-sm`}>
             <h3 className={`text-lg font-semibold mb-3 ${isDarkTheme ? 'text-white' : 'text-gray-800'}`}>Import Data</h3>
             <p className={`mb-4 ${isDarkTheme ? 'text-gray-300' : 'text-gray-600'}`}>
-              Upload a CSV file to import fasting records and weight data. Duplicates will be automatically filtered out.
+              Upload a CSV file to import fasting records and weight data. Data will be saved to the server.
             </p>
             
             <div className="space-y-3">
@@ -369,15 +368,17 @@ export function DataManager({ fasts, onImportFasts, theme, user }: DataManagerPr
                 accept=".csv"
                 onChange={handleImport}
                 className="hidden"
+                disabled={isLoading}
               />
               
               <Button
                 onClick={() => fileInputRef.current?.click()}
                 variant="outline"
                 className="flex items-center"
+                disabled={isLoading}
               >
                 <Upload className="w-4 h-4 mr-2" />
-                Choose CSV File
+                {isLoading ? 'Processing...' : 'Choose CSV File'}
               </Button>
 
               <div className={`text-sm ${isDarkTheme ? 'text-gray-400' : 'text-gray-500'}`}>

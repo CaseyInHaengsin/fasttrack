@@ -96,14 +96,6 @@ export function HealthTracker({ fasts, theme, user }: HealthTrackerProps) {
       if (profileFromAPI) {
         setProfile(profileFromAPI);
         setIsMetric(profileFromAPI.weightUnit === 'kg');
-      } else {
-        // Fallback to localStorage
-        const savedProfile = localStorage.getItem(`healthProfile_${user}`);
-        if (savedProfile) {
-          const parsedProfile = JSON.parse(savedProfile);
-          setProfile(parsedProfile);
-          setIsMetric(parsedProfile.weightUnit === 'kg');
-        }
       }
       
       // Load weights
@@ -111,45 +103,19 @@ export function HealthTracker({ fasts, theme, user }: HealthTrackerProps) {
       setWeightEntries(weightsFromAPI);
     } catch (error) {
       console.error('Failed to load health data from API:', error);
-      // Fallback to localStorage
-      const savedProfile = localStorage.getItem(`healthProfile_${user}`);
-      const savedWeights = localStorage.getItem(`weightEntries_${user}`);
-      
-      if (savedProfile) {
-        const parsedProfile = JSON.parse(savedProfile);
-        setProfile(parsedProfile);
-        setIsMetric(parsedProfile.weightUnit === 'kg');
-      }
-      
-      if (savedWeights) {
-        const parsed = JSON.parse(savedWeights).map((entry: any) => ({
-          ...entry,
-          date: new Date(entry.date)
-        }));
-        setWeightEntries(parsed);
-      }
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Save data to API with localStorage fallback
+  // Save data to API
   const saveProfile = async (newProfile: UserProfile) => {
     try {
       await apiService.saveProfile(user, newProfile);
       setProfile(newProfile);
     } catch (error) {
       console.error('Failed to save profile to API:', error);
-      // Fallback to localStorage
-      setProfile(newProfile);
-      localStorage.setItem(`healthProfile_${user}`, JSON.stringify(newProfile));
     }
-  };
-
-  const saveWeightEntries = async (entries: WeightEntry[]) => {
-    setWeightEntries(entries);
-    // Also save to localStorage as backup
-    localStorage.setItem(`weightEntries_${user}`, JSON.stringify(entries));
   };
 
   // Calculate BMI
@@ -202,25 +168,7 @@ export function HealthTracker({ fasts, theme, user }: HealthTrackerProps) {
       await saveProfile({ ...profile, currentWeight: weight });
       setNewWeight('');
     } catch (error) {
-      console.error('Failed to save weight to API:', error);
-      // Fallback to localStorage
-      const weight = parseFloat(newWeight);
-      const bmi = calculateBMI(weight, profile.height, profile.weightUnit, profile.heightUnit);
-      
-      const entry: WeightEntry = {
-        id: crypto.randomUUID(),
-        weight,
-        date: new Date(),
-        bmi,
-        unit: profile.weightUnit
-      };
-      
-      const updatedEntries = [...weightEntries, entry].sort((a, b) => b.date.getTime() - a.date.getTime());
-      saveWeightEntries(updatedEntries);
-      
-      // Update current weight in profile
-      saveProfile({ ...profile, currentWeight: weight });
-      setNewWeight('');
+      console.error('Failed to save weight:', error);
     } finally {
       setIsLoading(false);
     }
@@ -234,10 +182,7 @@ export function HealthTracker({ fasts, theme, user }: HealthTrackerProps) {
       const updatedEntries = weightEntries.filter(entry => entry.id !== id);
       setWeightEntries(updatedEntries);
     } catch (error) {
-      console.error('Failed to delete weight from API:', error);
-      // Fallback to localStorage
-      const updatedEntries = weightEntries.filter(entry => entry.id !== id);
-      saveWeightEntries(updatedEntries);
+      console.error('Failed to delete weight:', error);
     } finally {
       setIsLoading(false);
     }
