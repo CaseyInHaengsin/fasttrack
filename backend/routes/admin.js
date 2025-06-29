@@ -52,6 +52,24 @@ const createAdminRoutes = (userService) => {
     }
   });
 
+  // Toggle user admin status
+  router.put('/users/:userId/admin', async (req, res) => {
+    try {
+      const { userId } = req.params;
+      
+      // Prevent admin from modifying their own admin status
+      if (userId === req.user.id) {
+        return res.status(400).json({ error: 'Cannot modify your own admin status' });
+      }
+      
+      const updatedUser = await userService.toggleUserAdmin(userId);
+      res.json({ user: updatedUser });
+    } catch (error) {
+      console.error('Error updating user admin status:', error);
+      res.status(400).json({ error: error.message });
+    }
+  });
+
   // Update user (admin can update any user)
   router.put('/users/:userId', async (req, res) => {
     try {

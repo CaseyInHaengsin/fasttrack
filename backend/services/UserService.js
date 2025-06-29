@@ -90,11 +90,17 @@ class UserService {
     
     // Check if user already exists
     const existingUser = Array.from(this.users.values()).find(
-      user => user.username === username || user.email === email
+      user => user.username.toLowerCase() === username.toLowerCase() || 
+             user.email.toLowerCase() === email.toLowerCase()
     );
     
     if (existingUser) {
-      throw new Error('User already exists');
+      if (existingUser.username.toLowerCase() === username.toLowerCase()) {
+        throw new Error('Username already exists');
+      }
+      if (existingUser.email.toLowerCase() === email.toLowerCase()) {
+        throw new Error('Email already exists');
+      }
     }
     
     // Create new user
@@ -116,11 +122,12 @@ class UserService {
     const { username, password } = credentials;
     
     const user = Array.from(this.users.values()).find(
-      u => u.username === username || u.email === username
+      u => u.username.toLowerCase() === username.toLowerCase() || 
+           u.email.toLowerCase() === username.toLowerCase()
     );
     
     if (!user || !await bcrypt.compare(password, user.passwordHash)) {
-      throw new Error('Invalid credentials');
+      throw new Error('Invalid username or password');
     }
     
     // Update last login
@@ -131,14 +138,14 @@ class UserService {
     const token = jwt.sign(
       { userId: user.id, username: user.username, isAdmin: user.isAdmin },
       this.jwtSecret,
-      { expiresIn: '7d' }
+      { expiresIn: '30d' } // Extended to 30 days for better UX
     );
     
     const session = {
       token,
       userId: user.id,
       createdAt: new Date().toISOString(),
-      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
     };
     
     this.sessions.set(token, session);
@@ -181,14 +188,50 @@ class UserService {
       throw new Error('User not found');
     }
     
-    // Update allowed fields
-    if (updates.username) user.username = updates.username;
-    if (updates.email) user.email = updates.email;
+    // Check for username/email conflicts
+    if (updates.username) {
+      const existingUser = Array.from(this.users.values()).find(
+        u => u.id !== userId && u.username.toLowerCase() === updates.username.toLowerCase()
+      );
+      if (existingUser) {
+        throw new Error('Username already exists');
+      }
+      user.username = updates.username;
+    }
+    
+    if (updates.email) {
+      const existingUser = Array.from(this.users.values()).find(
+        u => u.id !== userId && u.email.toLowerCase() === updates.email.toLowerCase()
+      );
+      if (existingUser) {
+        throw new Error('Email already exists');
+      }
+      user.email = updates.email;
+    }
+    
     if (updates.avatar !== undefined) user.avatar = updates.avatar;
     if (updates.password) {
       user.passwordHash = await bcrypt.hash(updates.password, 10);
     }
+    if (updates.isAdmin !== undefined) user.isAdmin = updates.isAdmin;
     
+    user.updatedAt = new Date().toISOString();
+    await this.saveUsers();
+    
+    return user.toJSON();
+  }
+
+  async changePassword(userId, currentPassword, newPassword) {
+    const user = this.users.get(userId);
+    if (!user) {
+      throw new Error('User not found');
+    }
+    
+    if (!await bcrypt.compare(currentPassword, user.passwordHash)) {
+      throw new Error('Current password is incorrect');
+    }
+    
+    user.passwordHash = await bcrypt.hash(newPassword, 10);
     user.updatedAt = new Date().toISOString();
     await this.saveUsers();
     
@@ -212,6 +255,19 @@ class UserService {
       await this.saveSessions();
     }
     return deleted;
+  }
+
+  async toggleUserAdmin(userId) {
+    const user = this.users.get(userId);
+    if (!user) {
+      throw new Error('User not found');
+    }
+    
+    user.isAdmin = !user.isAdmin;
+    user.updatedAt = new Date().toISOString();
+    await this.saveUsers();
+    
+    return user.toJSON();
   }
 
   async getUserStats() {

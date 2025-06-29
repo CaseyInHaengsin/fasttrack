@@ -50,7 +50,7 @@ export function AdminPanel({ theme, currentUser }: AdminPanelProps) {
     try {
       setIsLoading(true);
       setError(null);
-      const allUsers = authService.getAllUsers();
+      const allUsers = await authService.getAllUsers();
       setUsers(allUsers);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load users');
@@ -106,12 +106,12 @@ export function AdminPanel({ theme, currentUser }: AdminPanelProps) {
     totalUsers: users.length,
     adminUsers: users.filter(u => u.isAdmin).length,
     recentUsers: users.filter(u => {
-      const daysSinceCreation = (Date.now() - u.createdAt.getTime()) / (1000 * 60 * 60 * 24);
+      const daysSinceCreation = (Date.now() - new Date(u.createdAt).getTime()) / (1000 * 60 * 60 * 24);
       return daysSinceCreation <= 7;
     }).length,
     activeUsers: users.filter(u => {
       if (!u.lastLogin) return false;
-      const daysSinceLogin = (Date.now() - u.lastLogin.getTime()) / (1000 * 60 * 60 * 24);
+      const daysSinceLogin = (Date.now() - new Date(u.lastLogin).getTime()) / (1000 * 60 * 60 * 24);
       return daysSinceLogin <= 30;
     }).length
   };
@@ -248,10 +248,10 @@ export function AdminPanel({ theme, currentUser }: AdminPanelProps) {
                         {user.email}
                       </p>
                       <p className={`text-xs ${isDarkTheme ? 'text-gray-500' : 'text-gray-500'}`}>
-                        Joined: {format(user.createdAt, 'MMM dd, yyyy')}
+                        Joined: {format(new Date(user.createdAt), 'MMM dd, yyyy')}
                         {user.lastLogin && (
                           <span className="ml-2">
-                            • Last login: {format(user.lastLogin, 'MMM dd, yyyy')}
+                            • Last login: {format(new Date(user.lastLogin), 'MMM dd, yyyy')}
                           </span>
                         )}
                       </p>

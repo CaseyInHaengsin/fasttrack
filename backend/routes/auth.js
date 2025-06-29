@@ -7,10 +7,14 @@ const createAuthRoutes = (userService) => {
   // Register new user
   router.post('/register', async (req, res) => {
     try {
-      const { username, email, password } = req.body;
+      const { username, email, password, confirmPassword } = req.body;
       
       if (!username || !email || !password) {
         return res.status(400).json({ error: 'Username, email, and password are required' });
+      }
+      
+      if (password !== confirmPassword) {
+        return res.status(400).json({ error: 'Passwords do not match' });
       }
       
       if (password.length < 6) {
@@ -18,7 +22,15 @@ const createAuthRoutes = (userService) => {
       }
       
       const user = await userService.register({ username, email, password });
-      res.status(201).json({ user, message: 'User registered successfully' });
+      
+      // Auto-login after registration
+      const loginResult = await userService.login({ username, password });
+      
+      res.status(201).json({
+        user: loginResult.user,
+        token: loginResult.token,
+        message: 'User registered and logged in successfully'
+      });
     } catch (error) {
       console.error('Registration error:', error);
       res.status(400).json({ error: error.message });
@@ -59,13 +71,34 @@ const createAuthRoutes = (userService) => {
   });
 
   // Update user profile
-  router.put('/me', authMiddleware(userService), async (req, res) => {
+  router.put('/profile', authMiddleware(userService), async (req, res) => {
     try {
       const updates = req.body;
       const updatedUser = await userService.updateUser(req.user.id, updates);
       res.json({ user: updatedUser });
     } catch (error) {
       console.error('Profile update error:', error);
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // Change password
+  router.put('/password', authMiddleware(userService), async (req, res) => {
+    try {
+      const { currentPassword, newPassword } = req.body;
+      
+      if (!currentPassword || !newPassword) {
+        return res.status(400).json({ error: 'Current password and new password are required' });
+      }
+      
+      if (newPassword.length < 6) {
+        return res.status(400).json({ error: 'New password must be at least 6 characters long' });
+      }
+      
+      await userService.changePassword(req.user.id, currentPassword, newPassword);
+      res.json({ message: 'Password changed successfully' });
+    } catch (error) {
+      console.error('Password change error:', error);
       res.status(400).json({ error: error.message });
     }
   });
