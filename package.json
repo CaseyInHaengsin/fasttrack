@@ -7,7 +7,13 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "android:build": "npm run build && npx cap sync android && npx cap build android",
+    "android:dev": "npm run build && npx cap sync android && npx cap run android",
+    "android:open": "npx cap open android",
+    "capacitor:sync": "npx cap sync",
+    "capacitor:add": "npx cap add android",
+    "capacitor:copy": "npx cap copy"
   },
   "dependencies": {
     "lucide-react": "^0.344.0",
@@ -17,7 +23,19 @@
     "date-fns": "^2.30.0",
     "react-day-picker": "^8.10.0",
     "clsx": "^2.0.0",
-    "papaparse": "^5.4.1"
+    "papaparse": "^5.4.1",
+    "@capacitor/core": "^5.5.1",
+    "@capacitor/android": "^5.5.1",
+    "@capacitor/app": "^5.0.6",
+    "@capacitor/haptics": "^5.0.6",
+    "@capacitor/keyboard": "^5.0.6",
+    "@capacitor/status-bar": "^5.0.6",
+    "@capacitor/splash-screen": "^5.0.6",
+    "@capacitor/filesystem": "^5.1.4",
+    "@capacitor/share": "^5.0.6",
+    "@capacitor/device": "^5.0.6",
+    "@capacitor/network": "^5.0.6",
+    "@capacitor/preferences": "^5.0.6"
   },
   "devDependencies": {
     "@eslint/js": "^9.9.1",
@@ -34,6 +52,7 @@
     "tailwindcss": "^3.4.1",
     "typescript": "^5.5.3",
     "typescript-eslint": "^8.3.0",
-    "vite": "^5.4.2"
+    "vite": "^5.4.2",
+    "@capacitor/cli": "^5.5.1"
   }
 }

@@ -11,9 +11,12 @@ import { LoginForm } from './components/auth/LoginForm';
 import { RegisterForm } from './components/auth/RegisterForm';
 import { ProfileSettings } from './components/profile/ProfileSettings';
 import { AdminPanel } from './components/admin/AdminPanel';
+import { MobileOptimizations } from './components/mobile/MobileOptimizations';
 import { Button } from './components/ui/Button';
 import { authService } from './services/authService';
 import { apiService } from './services/apiService';
+import { storageService } from './services/storageService';
+import { useCapacitor } from './hooks/useCapacitor';
 import { User as UserType, LoginCredentials, RegisterData } from './types/auth';
 
 interface Fast {
@@ -28,9 +31,22 @@ function App() {
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   const [fasts, setFasts] = useState<Fast[]>([]);
   const [user, setUser] = useState<UserType | null>(null);
-  const [theme, setTheme] = useState<string>(localStorage.getItem('fastingTheme') || 'blue');
+  const [theme, setTheme] = useState<string>('blue');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  
+  const { isNative, platform } = useCapacitor();
+
+  // Initialize theme from storage
+  useEffect(() => {
+    const initTheme = async () => {
+      const savedTheme = await storageService.getItem('fastingTheme');
+      if (savedTheme) {
+        setTheme(savedTheme);
+      }
+    };
+    initTheme();
+  }, []);
 
   // Check for existing authentication on mount
   useEffect(() => {
@@ -41,24 +57,40 @@ function App() {
     }
   }, []);
 
-  // Save theme to localStorage
+  // Save theme to storage
   useEffect(() => {
-    localStorage.setItem('fastingTheme', theme);
+    storageService.setItem('fastingTheme', theme);
   }, [theme]);
 
   const loadFastsFromAPI = async (userId: string) => {
     try {
       setIsLoading(true);
       setError(null);
-      const fastsFromAPI = await apiService.getFasts(userId);
-      setFasts(fastsFromAPI);
+      
+      if (isNative) {
+        // For mobile app, try to load from local storage first
+        const localFasts = await storageService.getObject<Fast[]>(`fastingData_${userId}`);
+        if (localFasts) {
+          const parsedFasts = localFasts.map((fast: any) => ({
+            ...fast,
+            startTime: new Date(fast.startTime),
+            endTime: new Date(fast.endTime)
+          }));
+          setFasts(parsedFasts);
+        }
+      } else {
+        // For web, try API first
+        const fastsFromAPI = await apiService.getFasts(userId);
+        setFasts(fastsFromAPI);
+      }
     } catch (error) {
-      console.error('Failed to load fasts from API:', error);
-      setError('Failed to load data from server. Using local storage as fallback.');
-      // Fallback to localStorage
-      const savedFasts = localStorage.getItem(`fastingData_${userId}`);
+      console.error('Failed to load fasts:', error);
+      setError('Failed to load data. Using local storage as fallback.');
+      
+      // Fallback to local storage
+      const savedFasts = await storageService.getObject<Fast[]>(`fastingData_${userId}`);
       if (savedFasts) {
-        const parsedFasts = JSON.parse(savedFasts).map((fast: any) => ({
+        const parsedFasts = savedFasts.map((fast: any) => ({
           ...fast,
           startTime: new Date(fast.startTime),
           endTime: new Date(fast.endTime)
@@ -119,28 +151,34 @@ function App() {
       
       const duration = (endTime.getTime() - startTime.getTime()) / (1000 * 60 * 60);
       
-      const newFast = await apiService.saveFast(user.id, {
-        startTime,
-        endTime,
-        duration
-      });
-      
-      setFasts(prevFasts => [...prevFasts, newFast]);
-    } catch (error) {
-      console.error('Failed to save fast to API:', error);
-      setError('Failed to save to server. Saving locally as fallback.');
-      
-      // Fallback to localStorage
       const newFast: Fast = {
         id: crypto.randomUUID(),
         startTime,
         endTime,
-        duration: (endTime.getTime() - startTime.getTime()) / (1000 * 60 * 60)
+        duration
       };
-      
+
+      // Always save to local storage first (for mobile reliability)
       const updatedFasts = [...fasts, newFast];
       setFasts(updatedFasts);
-      localStorage.setItem(`fastingData_${user.id}`, JSON.stringify(updatedFasts));
+      await storageService.setObject(`fastingData_${user.id}`, updatedFasts);
+
+      // Try to sync with API if not on mobile or if online
+      if (!isNative) {
+        try {
+          await apiService.saveFast(user.id, {
+            startTime,
+            endTime,
+            duration
+          });
+        } catch (apiError) {
+          console.warn('Failed to sync with API:', apiError);
+          // Data is already saved locally, so this is not critical
+        }
+      }
+    } catch (error) {
+      console.error('Failed to save fast:', error);
+      setError('Failed to save fast. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -153,26 +191,30 @@ function App() {
       setIsLoading(true);
       setError(null);
       
-      await apiService.deleteFast(user.id, id);
-      setFasts(prevFasts => prevFasts.filter(fast => fast.id !== id));
-    } catch (error) {
-      console.error('Failed to delete fast from API:', error);
-      setError('Failed to delete from server. Deleting locally as fallback.');
-      
-      // Fallback to localStorage
       const updatedFasts = fasts.filter(fast => fast.id !== id);
       setFasts(updatedFasts);
-      localStorage.setItem(`fastingData_${user.id}`, JSON.stringify(updatedFasts));
+      await storageService.setObject(`fastingData_${user.id}`, updatedFasts);
+
+      // Try to sync with API if not on mobile
+      if (!isNative) {
+        try {
+          await apiService.deleteFast(user.id, id);
+        } catch (apiError) {
+          console.warn('Failed to sync deletion with API:', apiError);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to delete fast:', error);
+      setError('Failed to delete fast. Please try again.');
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleImportFasts = (importedFasts: Fast[]) => {
+  const handleImportFasts = async (importedFasts: Fast[]) => {
     setFasts(importedFasts);
-    // Also save to localStorage as backup
     if (user) {
-      localStorage.setItem(`fastingData_${user.id}`, JSON.stringify(importedFasts));
+      await storageService.setObject(`fastingData_${user.id}`, importedFasts);
     }
   };
 
@@ -215,26 +257,30 @@ function App() {
   if (!user) {
     if (authMode === 'register') {
       return (
-        <RegisterForm
-          onRegister={handleRegister}
-          onSwitchToLogin={() => setAuthMode('login')}
+        <MobileOptimizations>
+          <RegisterForm
+            onRegister={handleRegister}
+            onSwitchToLogin={() => setAuthMode('login')}
+            theme={theme}
+            onThemeChange={setTheme}
+            isLoading={isLoading}
+            error={error}
+          />
+        </MobileOptimizations>
+      );
+    }
+
+    return (
+      <MobileOptimizations>
+        <LoginForm
+          onLogin={handleLogin}
+          onSwitchToRegister={() => setAuthMode('register')}
           theme={theme}
           onThemeChange={setTheme}
           isLoading={isLoading}
           error={error}
         />
-      );
-    }
-
-    return (
-      <LoginForm
-        onLogin={handleLogin}
-        onSwitchToRegister={() => setAuthMode('register')}
-        theme={theme}
-        onThemeChange={setTheme}
-        isLoading={isLoading}
-        error={error}
-      />
+      </MobileOptimizations>
     );
   }
 
@@ -249,136 +295,143 @@ function App() {
   ];
 
   return (
-    <div className={`min-h-screen ${backgroundClasses[theme as keyof typeof backgroundClasses]}`}>
-      {/* Header */}
-      <header className={headerClasses[theme as keyof typeof headerClasses]}>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between py-4">
-            <div className="flex items-center">
-              <Calendar className={`w-8 h-8 ${iconColors[theme as keyof typeof iconColors]} mr-3`} />
-              <h1 className={`text-2xl font-bold ${isDarkTheme ? 'text-white' : 'text-gray-800'}`}>FastTrack</h1>
-            </div>
-            <div className="flex items-center space-x-4">
-              <ThemeSelector currentTheme={theme} onThemeChange={setTheme} />
-              <div className={`flex items-center space-x-3 ${isDarkTheme ? 'text-gray-300' : 'text-gray-600'}`}>
-                {user.avatar && (
-                  <img
-                    src={user.avatar}
-                    alt={user.username}
-                    className="w-8 h-8 rounded-full object-cover"
-                  />
+    <MobileOptimizations>
+      <div className={`min-h-screen ${backgroundClasses[theme as keyof typeof backgroundClasses]}`}>
+        {/* Header */}
+        <header className={`${headerClasses[theme as keyof typeof headerClasses]} ${isNative ? 'status-bar-safe' : ''}`}>
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex items-center justify-between py-4">
+              <div className="flex items-center">
+                <Calendar className={`w-8 h-8 ${iconColors[theme as keyof typeof iconColors]} mr-3`} />
+                <h1 className={`text-2xl font-bold ${isDarkTheme ? 'text-white' : 'text-gray-800'}`}>FastTrack</h1>
+                {isNative && (
+                  <span className={`ml-2 text-xs px-2 py-1 rounded ${isDarkTheme ? 'bg-gray-700 text-gray-300' : 'bg-gray-200 text-gray-600'}`}>
+                    {platform}
+                  </span>
                 )}
-                <div className="flex items-center">
-                  <User className="w-4 h-4 mr-2" />
-                  <span>{user.username}</span>
-                  {user.isAdmin && (
-                    <Shield className="w-4 h-4 ml-2 text-purple-500" />
-                  )}
-                </div>
               </div>
-              {isLoading && (
-                <div className={`text-sm ${isDarkTheme ? 'text-gray-400' : 'text-gray-500'}`}>
-                  Syncing...
+              <div className="flex items-center space-x-4">
+                <ThemeSelector currentTheme={theme} onThemeChange={setTheme} />
+                <div className={`flex items-center space-x-3 ${isDarkTheme ? 'text-gray-300' : 'text-gray-600'}`}>
+                  {user.avatar && (
+                    <img
+                      src={user.avatar}
+                      alt={user.username}
+                      className="w-8 h-8 rounded-full object-cover"
+                    />
+                  )}
+                  <div className="flex items-center">
+                    <User className="w-4 h-4 mr-2" />
+                    <span className="hidden sm:inline">{user.username}</span>
+                    {user.isAdmin && (
+                      <Shield className="w-4 h-4 ml-2 text-purple-500" />
+                    )}
+                  </div>
                 </div>
-              )}
-              <Button variant="outline" size="sm" onClick={handleLogout}>
-                Logout
-              </Button>
+                {isLoading && (
+                  <div className={`text-sm ${isDarkTheme ? 'text-gray-400' : 'text-gray-500'}`}>
+                    Syncing...
+                  </div>
+                )}
+                <Button variant="outline" size="sm" onClick={handleLogout}>
+                  Logout
+                </Button>
+              </div>
             </div>
           </div>
-        </div>
-      </header>
+        </header>
 
-      {/* Error Message */}
-      {error && (
-        <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4">
-          <div className="flex">
-            <div className="ml-3">
-              <p className="text-sm text-yellow-700">{error}</p>
+        {/* Error Message */}
+        {error && (
+          <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4">
+            <div className="flex">
+              <div className="ml-3">
+                <p className="text-sm text-yellow-700">{error}</p>
+              </div>
+              <div className="ml-auto">
+                <button
+                  onClick={() => setError(null)}
+                  className="text-yellow-400 hover:text-yellow-600 touch-target"
+                >
+                  ×
+                </button>
+              </div>
             </div>
-            <div className="ml-auto">
-              <button
-                onClick={() => setError(null)}
-                className="text-yellow-400 hover:text-yellow-600"
-              >
-                ×
-              </button>
+          </div>
+        )}
+
+        {/* Navigation */}
+        <nav className={headerClasses[theme as keyof typeof headerClasses]}>
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex space-x-2 sm:space-x-8 overflow-x-auto">
+              {tabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`flex items-center px-3 py-4 text-sm font-medium border-b-2 transition-all duration-200 whitespace-nowrap touch-target haptic-feedback ${
+                    activeTab === tab.id
+                      ? `border-${isDarkTheme ? 'gray-300' : theme + '-500'} text-${isDarkTheme ? 'gray-300' : theme + '-600'}`
+                      : `border-transparent ${isDarkTheme ? 'text-gray-400 hover:text-gray-300' : 'text-gray-500 hover:text-gray-700'} hover:border-gray-300`
+                  }`}
+                >
+                  {tab.icon}
+                  <span className="ml-2 hidden sm:inline">{tab.label}</span>
+                </button>
+              ))}
             </div>
           </div>
-        </div>
-      )}
+        </nav>
 
-      {/* Navigation */}
-      <nav className={headerClasses[theme as keyof typeof headerClasses]}>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex space-x-8 overflow-x-auto">
-            {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center px-3 py-4 text-sm font-medium border-b-2 transition-colors duration-200 whitespace-nowrap ${
-                  activeTab === tab.id
-                    ? `border-${isDarkTheme ? 'gray-300' : theme + '-500'} text-${isDarkTheme ? 'gray-300' : theme + '-600'}`
-                    : `border-transparent ${isDarkTheme ? 'text-gray-400 hover:text-gray-300' : 'text-gray-500 hover:text-gray-700'} hover:border-gray-300`
-                }`}
-              >
-                {tab.icon}
-                <span className="ml-2">{tab.label}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      </nav>
+        {/* Main Content */}
+        <main className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 ${isNative ? 'bottom-safe' : ''}`}>
+          {activeTab === 'calendar' && (
+            <div className="space-y-8">
+              <CalendarFastEntry onAddFast={handleAddFast} theme={theme} />
+              {fasts.length > 0 && <FastingStats fasts={fasts} theme={theme} />}
+            </div>
+          )}
 
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {activeTab === 'calendar' && (
-          <div className="space-y-8">
-            <CalendarFastEntry onAddFast={handleAddFast} theme={theme} />
-            {fasts.length > 0 && <FastingStats fasts={fasts} theme={theme} />}
-          </div>
-        )}
+          {activeTab === 'stats' && (
+            <div className="space-y-8">
+              <FastingStats fasts={fasts} theme={theme} />
+              <FastingChart fasts={fasts} theme={theme} />
+            </div>
+          )}
 
-        {activeTab === 'stats' && (
-          <div className="space-y-8">
-            <FastingStats fasts={fasts} theme={theme} />
-            <FastingChart fasts={fasts} theme={theme} />
-          </div>
-        )}
+          {activeTab === 'history' && (
+            <FastingHistory fasts={fasts} onDeleteFast={handleDeleteFast} theme={theme} />
+          )}
 
-        {activeTab === 'history' && (
-          <FastingHistory fasts={fasts} onDeleteFast={handleDeleteFast} theme={theme} />
-        )}
+          {activeTab === 'health' && (
+            <HealthTracker fasts={fasts} theme={theme} user={user.id} />
+          )}
 
-        {activeTab === 'health' && (
-          <HealthTracker fasts={fasts} theme={theme} user={user.id} />
-        )}
+          {activeTab === 'data' && (
+            <DataManager 
+              fasts={fasts} 
+              onImportFasts={handleImportFasts} 
+              theme={theme} 
+              user={user.id}
+            />
+          )}
 
-        {activeTab === 'data' && (
-          <DataManager 
-            fasts={fasts} 
-            onImportFasts={handleImportFasts} 
-            theme={theme} 
-            user={user.id}
-          />
-        )}
+          {activeTab === 'profile' && (
+            <ProfileSettings
+              user={user}
+              theme={theme}
+              onUserUpdate={handleUserUpdate}
+            />
+          )}
 
-        {activeTab === 'profile' && (
-          <ProfileSettings
-            user={user}
-            theme={theme}
-            onUserUpdate={handleUserUpdate}
-          />
-        )}
-
-        {activeTab === 'admin' && user.isAdmin && (
-          <AdminPanel
-            theme={theme}
-            currentUser={user}
-          />
-        )}
-      </main>
-    </div>
+          {activeTab === 'admin' && user.isAdmin && (
+            <AdminPanel
+              theme={theme}
+              currentUser={user}
+            />
+          )}
+        </main>
+      </div>
+    </MobileOptimizations>
   );
 }
 
