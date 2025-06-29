@@ -5,7 +5,13 @@
 echo "🚀 Starting FastTrack Full-Stack Application..."
 
 # Ensure data directory exists with proper permissions
-mkdir -p /data/app_data
+# First create the base directory as root
+mkdir -p /data
+
+# Create the app_data directory as the nginx user to ensure proper ownership
+su -s /bin/sh nginx -c "mkdir -p /data/app_data"
+
+# Set proper ownership and permissions
 chown -R nginx:nginx /data
 chmod -R 775 /data
 
