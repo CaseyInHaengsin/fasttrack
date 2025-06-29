@@ -7,6 +7,7 @@ echo "🚀 Starting FastTrack Full-Stack Application..."
 # Ensure data directory exists with proper permissions
 mkdir -p /data/app_data
 chown -R nginx:nginx /data
+chmod -R 775 /data
 
 # Start the backend API server in the background
 echo "📡 Starting backend API server..."
