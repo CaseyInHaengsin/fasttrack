@@ -1,5 +1,7 @@
 # FastTrack - Personal Fasting Companion 🏃‍♂️💨
 
+This application was built using https://bolt.new, made for tracking my intermitent and long fasts
+
 A beautiful, full-featured intermittent fasting tracker with persistent data storage, health monitoring, and comprehensive analytics.
 
 ## ✨ Features
@@ -20,10 +22,13 @@ A beautiful, full-featured intermittent fasting tracker with persistent data sto
 - Docker and Docker Compose installed
 - Port 3004 available
 
-### One-Command Deployment
-```bash
-# Clone and deploy
-git clone <your-repo-url>
+### Easy Deployment
+For ease of deployment
+git clone https://github.com/theqldcoalminer/fasttrack.git
+docker-compose up -d
+or use bash
+
+git clone https://github.com/theqldcoalminer/fasttrack.git
 cd fasttrack
 chmod +x deploy.sh
 ./deploy.sh
