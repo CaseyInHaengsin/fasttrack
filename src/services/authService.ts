@@ -4,38 +4,56 @@ class AuthService {
   private readonly API_BASE_URL = '/api/auth';
   private currentUser: User | null = null;
   private authToken: string | null = null;
+  private initPromise: Promise<void> | null = null;
 
   constructor() {
-    // Load token from localStorage on initialization
+    // Initialize authentication state
+    this.initPromise = this.initialize();
+  }
+
+  private async initialize(): Promise<void> {
+    // Load token from localStorage
     this.authToken = localStorage.getItem('fasttrack_token');
-    this.loadCurrentUser();
+    
+    if (this.authToken) {
+      try {
+        // Validate token with server and load user data
+        await this.loadCurrentUser();
+      } catch (error) {
+        console.error('Failed to validate stored token:', error);
+        this.clearAuth();
+      }
+    }
+  }
+
+  // Ensure initialization is complete before any operation
+  private async ensureInitialized(): Promise<void> {
+    if (this.initPromise) {
+      await this.initPromise;
+      this.initPromise = null;
+    }
   }
 
   private async loadCurrentUser(): Promise<void> {
     if (!this.authToken) return;
 
-    try {
-      const response = await fetch(`${this.API_BASE_URL}/me`, {
-        headers: {
-          'Authorization': `Bearer ${this.authToken}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        this.currentUser = {
-          ...data.user,
-          createdAt: new Date(data.user.createdAt),
-          lastLogin: data.user.lastLogin ? new Date(data.user.lastLogin) : undefined
-        };
-      } else {
-        // Token is invalid, clear it
-        this.clearAuth();
+    const response = await fetch(`${this.API_BASE_URL}/me`, {
+      headers: {
+        'Authorization': `Bearer ${this.authToken}`,
+        'Content-Type': 'application/json'
       }
-    } catch (error) {
-      console.error('Failed to load current user:', error);
-      this.clearAuth();
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      this.currentUser = {
+        ...data.user,
+        createdAt: new Date(data.user.createdAt),
+        lastLogin: data.user.lastLogin ? new Date(data.user.lastLogin) : undefined
+      };
+    } else {
+      // Token is invalid, clear it
+      throw new Error('Invalid token');
     }
   }
 
@@ -52,6 +70,8 @@ class AuthService {
   }
 
   async register(data: RegisterData): Promise<User> {
+    await this.ensureInitialized();
+
     if (data.password !== data.confirmPassword) {
       throw new Error('Passwords do not match');
     }
@@ -85,6 +105,8 @@ class AuthService {
   }
 
   async login(credentials: LoginCredentials): Promise<User> {
+    await this.ensureInitialized();
+
     const response = await fetch(`${this.API_BASE_URL}/login`, {
       method: 'POST',
       headers: {
@@ -110,6 +132,8 @@ class AuthService {
   }
 
   async logout(): Promise<void> {
+    await this.ensureInitialized();
+
     if (this.authToken) {
       try {
         await fetch(`${this.API_BASE_URL}/logout`, {
@@ -127,7 +151,8 @@ class AuthService {
     this.clearAuth();
   }
 
-  getCurrentUser(): User | null {
+  async getCurrentUser(): Promise<User | null> {
+    await this.ensureInitialized();
     return this.currentUser;
   }
 
@@ -135,11 +160,14 @@ class AuthService {
     return this.authToken;
   }
 
-  isAuthenticated(): boolean {
+  async isAuthenticated(): Promise<boolean> {
+    await this.ensureInitialized();
     return this.currentUser !== null && this.authToken !== null;
   }
 
   async updateProfile(updates: Partial<User>): Promise<User> {
+    await this.ensureInitialized();
+
     if (!this.authToken) {
       throw new Error('Not authenticated');
     }
@@ -174,6 +202,8 @@ class AuthService {
   }
 
   async changePassword(currentPassword: string, newPassword: string): Promise<void> {
+    await this.ensureInitialized();
+
     if (!this.authToken) {
       throw new Error('Not authenticated');
     }
@@ -202,6 +232,8 @@ class AuthService {
 
   // Admin functions
   async getAllUsers(): Promise<User[]> {
+    await this.ensureInitialized();
+
     if (!this.authToken) {
       throw new Error('Not authenticated');
     }
@@ -227,6 +259,8 @@ class AuthService {
   }
 
   async deleteUser(userId: string): Promise<void> {
+    await this.ensureInitialized();
+
     if (!this.authToken) {
       throw new Error('Not authenticated');
     }
@@ -246,6 +280,8 @@ class AuthService {
   }
 
   async toggleUserAdmin(userId: string): Promise<void> {
+    await this.ensureInitialized();
+
     if (!this.authToken) {
       throw new Error('Not authenticated');
     }

@@ -29,16 +29,28 @@ function App() {
   const [fasts, setFasts] = useState<Fast[]>([]);
   const [user, setUser] = useState<UserType | null>(null);
   const [theme, setTheme] = useState<string>(localStorage.getItem('fastingTheme') || 'blue');
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   // Check for existing authentication on mount
   useEffect(() => {
-    const currentUser = authService.getCurrentUser();
-    if (currentUser) {
-      setUser(currentUser);
-      loadFastsFromAPI(currentUser.id);
-    }
+    const checkAuth = async () => {
+      try {
+        setIsLoading(true);
+        const currentUser = await authService.getCurrentUser();
+        if (currentUser) {
+          setUser(currentUser);
+          await loadFastsFromAPI(currentUser.id);
+        }
+      } catch (error) {
+        console.error('Auth check failed:', error);
+        setError('Failed to verify authentication. Please try logging in again.');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    checkAuth();
   }, []);
 
   // Save theme to localStorage
@@ -48,15 +60,12 @@ function App() {
 
   const loadFastsFromAPI = async (userId: string) => {
     try {
-      setIsLoading(true);
       setError(null);
       const fastsFromAPI = await apiService.getFasts(userId);
       setFasts(fastsFromAPI);
     } catch (error) {
       console.error('Failed to load fasts from API:', error);
       setError('Failed to load data from server. Please try refreshing the page.');
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -188,6 +197,23 @@ function App() {
   };
 
   const isDarkTheme = theme === 'dark' || theme === 'midnight';
+
+  // Show loading screen during initial auth check
+  if (isLoading && user === null && !error) {
+    return (
+      <div className={`min-h-screen ${backgroundClasses[theme as keyof typeof backgroundClasses]} flex items-center justify-center`}>
+        <div className="text-center">
+          <Calendar className={`w-16 h-16 ${iconColors[theme as keyof typeof iconColors]} mx-auto mb-4 animate-pulse`} />
+          <h1 className={`text-3xl font-bold ${isDarkTheme ? 'text-white' : 'text-gray-800'} mb-2`}>
+            FastTrack
+          </h1>
+          <p className={`${isDarkTheme ? 'text-gray-300' : 'text-gray-600'}`}>
+            Loading your fasting journey...
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   // Show authentication forms if not logged in
   if (!user) {
