@@ -3,14 +3,12 @@ import { Card, CardContent } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { Calendar, Eye, EyeOff, UserPlus, ArrowLeft } from 'lucide-react';
-import { ThemeSelector } from '../ThemeSelector';
 import { RegisterData } from '../../types/auth';
 
 interface RegisterFormProps {
   onRegister: (data: RegisterData) => Promise<void>;
   onSwitchToLogin: () => void;
   theme: string;
-  onThemeChange: (theme: string) => void;
   isLoading: boolean;
   error: string | null;
 }
@@ -19,7 +17,6 @@ export function RegisterForm({
   onRegister, 
   onSwitchToLogin, 
   theme, 
-  onThemeChange, 
   isLoading, 
   error 
 }: RegisterFormProps) {
@@ -207,12 +204,6 @@ export function RegisterForm({
               <ArrowLeft className="w-4 h-4 mr-1" />
               Back to Sign In
             </button>
-          </div>
-
-          <div className="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
-            <div className="flex justify-center relative z-[200]">
-              <ThemeSelector currentTheme={theme} onThemeChange={onThemeChange} />
-            </div>
           </div>
 
           {/* Cross-device info */}

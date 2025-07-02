@@ -21,6 +21,15 @@ interface WeightEntry {
   unit: 'kg' | 'lb';
 }
 
+interface SupplementEntry {
+  id: string;
+  name: string;
+  quantity: number;
+  unit: string;
+  time: Date;
+  notes?: string;
+}
+
 interface DataManagerProps {
   fasts: Fast[];
   onImportFasts: (fasts: Fast[]) => void;
@@ -36,12 +45,21 @@ export function DataManager({ fasts, onImportFasts, theme, user }: DataManagerPr
   }>({ type: null, message: '' });
   const [isLoading, setIsLoading] = useState(false);
 
-  // Load weight entries and health profile from API
+  // Load weight entries, supplements, and health profile from API
   const getWeightEntries = async (): Promise<WeightEntry[]> => {
     try {
       return await apiService.getWeights(user);
     } catch (error) {
       console.error('Failed to load weights from API:', error);
+      return [];
+    }
+  };
+
+  const getSupplements = async (): Promise<SupplementEntry[]> => {
+    try {
+      return await apiService.getSupplements(user);
+    } catch (error) {
+      console.error('Failed to load supplements from API:', error);
       return [];
     }
   };
@@ -88,6 +106,7 @@ export function DataManager({ fasts, onImportFasts, theme, user }: DataManagerPr
     try {
       setIsLoading(true);
       const weightEntries = await getWeightEntries();
+      const supplements = await getSupplements();
       const healthProfile = await getHealthProfile();
 
       // Prepare fasting data with calories
@@ -108,7 +127,12 @@ export function DataManager({ fasts, onImportFasts, theme, user }: DataManagerPr
           // Weight data (empty for fasting records)
           weight: '',
           bmi: '',
-          weightUnit: ''
+          weightUnit: '',
+          // Supplement data (empty for fasting records)
+          supplementName: '',
+          supplementQuantity: '',
+          supplementUnit: '',
+          supplementNotes: ''
         };
       });
 
@@ -129,11 +153,42 @@ export function DataManager({ fasts, onImportFasts, theme, user }: DataManagerPr
         weight: entry.weight,
         bmi: entry.bmi.toFixed(2),
         weightUnit: entry.unit,
-        weightDate: entry.date.toISOString()
+        weightDate: entry.date.toISOString(),
+        // Supplement data (empty for weight records)
+        supplementName: '',
+        supplementQuantity: '',
+        supplementUnit: '',
+        supplementNotes: ''
+      }));
+
+      // Prepare supplement data
+      const supplementData = supplements.map(supplement => ({
+        type: 'supplement',
+        id: supplement.id,
+        startTime: '',
+        endTime: '',
+        duration: '',
+        startDate: format(supplement.time, 'yyyy-MM-dd'),
+        startHour: format(supplement.time, 'HH:mm'),
+        endDate: '',
+        endHour: '',
+        durationHours: '',
+        caloriesBurned: '',
+        // Weight data (empty for supplement records)
+        weight: '',
+        bmi: '',
+        weightUnit: '',
+        weightDate: '',
+        // Supplement data
+        supplementName: supplement.name,
+        supplementQuantity: supplement.quantity,
+        supplementUnit: supplement.unit,
+        supplementTime: supplement.time.toISOString(),
+        supplementNotes: supplement.notes || ''
       }));
 
       // Combine all data
-      const allData = [...fastingData, ...weightData];
+      const allData = [...fastingData, ...weightData, ...supplementData];
 
       const csv = Papa.unparse(allData);
       const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -150,7 +205,7 @@ export function DataManager({ fasts, onImportFasts, theme, user }: DataManagerPr
         
         setImportStatus({
           type: 'success',
-          message: `Successfully exported ${fasts.length} fasting records and ${weightEntries.length} weight entries`
+          message: `Successfully exported ${fasts.length} fasting records, ${weightEntries.length} weight entries, and ${supplements.length} supplement entries`
         });
       }
     } catch (error) {
@@ -184,6 +239,7 @@ export function DataManager({ fasts, onImportFasts, theme, user }: DataManagerPr
         try {
           const importedFasts: Fast[] = [];
           const importedWeights: WeightEntry[] = [];
+          const importedSupplements: SupplementEntry[] = [];
           const errors: string[] = [];
 
           results.data.forEach((row: any, index: number) => {
@@ -242,6 +298,25 @@ export function DataManager({ fasts, onImportFasts, theme, user }: DataManagerPr
                 };
 
                 importedWeights.push(weightEntry);
+              } else if (row.type === 'supplement' || (!row.type && row.supplementName)) {
+                // Handle supplement data
+                const quantity = parseFloat(row.supplementQuantity);
+                const time = row.supplementTime ? new Date(row.supplementTime) : new Date(`${row.startDate}T${row.startHour}:00`);
+
+                if (!row.supplementName || isNaN(quantity) || isNaN(time.getTime())) {
+                  throw new Error('Invalid supplement data');
+                }
+
+                const supplementEntry: SupplementEntry = {
+                  id: row.id || crypto.randomUUID(),
+                  name: row.supplementName,
+                  quantity,
+                  unit: row.supplementUnit || 'mg',
+                  time,
+                  notes: row.supplementNotes || ''
+                };
+
+                importedSupplements.push(supplementEntry);
               }
             } catch (error) {
               errors.push(`Row ${index + 1}: ${error instanceof Error ? error.message : 'Invalid data'}`);
@@ -249,16 +324,17 @@ export function DataManager({ fasts, onImportFasts, theme, user }: DataManagerPr
           });
 
           // Import data via API
-          if (importedFasts.length > 0 || importedWeights.length > 0) {
+          if (importedFasts.length > 0 || importedWeights.length > 0 || importedSupplements.length > 0) {
             try {
               await apiService.importData(user, {
                 fasts: importedFasts,
-                weights: importedWeights
+                weights: importedWeights,
+                supplements: importedSupplements
               });
 
               setImportStatus({
                 type: 'success',
-                message: `Successfully imported ${importedFasts.length} fasting records and ${importedWeights.length} weight entries${errors.length > 0 ? ` (${errors.length} errors)` : ''}`
+                message: `Successfully imported ${importedFasts.length} fasting records, ${importedWeights.length} weight entries, and ${importedSupplements.length} supplement entries${errors.length > 0 ? ` (${errors.length} errors)` : ''}`
               });
 
               // Refresh the page to show updated data
@@ -341,6 +417,7 @@ export function DataManager({ fasts, onImportFasts, theme, user }: DataManagerPr
             <ul className={`list-disc list-inside mb-4 text-sm space-y-1 ${isDarkTheme ? 'text-gray-400' : 'text-gray-500'}`}>
               <li>Fasting records with calculated calories burned</li>
               <li>Weight history with BMI calculations</li>
+              <li>Supplement tracking with quantities and times</li>
               <li>All dates, times, and measurements</li>
               <li>Compatible format for re-importing</li>
             </ul>
@@ -358,7 +435,7 @@ export function DataManager({ fasts, onImportFasts, theme, user }: DataManagerPr
           <div className={`${isDarkTheme ? 'bg-gray-700/90' : 'bg-white/90'} backdrop-blur-sm rounded-lg p-6 shadow-sm`}>
             <h3 className={`text-lg font-semibold mb-3 ${isDarkTheme ? 'text-white' : 'text-gray-800'}`}>Import Data</h3>
             <p className={`mb-4 ${isDarkTheme ? 'text-gray-300' : 'text-gray-600'}`}>
-              Upload a CSV file to import fasting records and weight data. Data will be saved to the server.
+              Upload a CSV file to import fasting records, weight data, and supplement tracking. Data will be saved to the server.
             </p>
             
             <div className="space-y-3">
@@ -386,6 +463,7 @@ export function DataManager({ fasts, onImportFasts, theme, user }: DataManagerPr
                 <ul className="list-disc list-inside space-y-1 text-xs">
                   <li><strong>Fasting records:</strong> type, startTime, endTime, duration, caloriesBurned</li>
                   <li><strong>Weight records:</strong> type, weight, bmi, weightUnit, weightDate</li>
+                  <li><strong>Supplement records:</strong> type, supplementName, supplementQuantity, supplementUnit, supplementTime, supplementNotes</li>
                   <li>Dates in ISO format (YYYY-MM-DDTHH:mm:ss.sssZ)</li>
                   <li>Or separate: startDate, startHour, endDate, endHour</li>
                   <li>Duration in hours (decimal), calories as numbers</li>

@@ -3,14 +3,12 @@ import { Card, CardContent } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { Calendar, Eye, EyeOff, LogIn, UserPlus, RefreshCw } from 'lucide-react';
-import { ThemeSelector } from '../ThemeSelector';
 import { LoginCredentials } from '../../types/auth';
 
 interface LoginFormProps {
   onLogin: (credentials: LoginCredentials) => Promise<void>;
   onSwitchToRegister: () => void;
   theme: string;
-  onThemeChange: (theme: string) => void;
   isLoading: boolean;
   error: string | null;
 }
@@ -19,7 +17,6 @@ export function LoginForm({
   onLogin, 
   onSwitchToRegister, 
   theme, 
-  onThemeChange, 
   isLoading, 
   error 
 }: LoginFormProps) {
@@ -165,12 +162,6 @@ export function LoginForm({
                 Create one
               </button>
             </p>
-          </div>
-
-          <div className="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
-            <div className="flex justify-center relative z-[200]">
-              <ThemeSelector currentTheme={theme} onThemeChange={onThemeChange} />
-            </div>
           </div>
 
           {/* Demo credentials info */}
