@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, BarChart3, History, User, Database, Activity, Settings, Shield } from 'lucide-react';
+import { Calendar, BarChart3, History, User, Database, Activity, Settings, Shield, Pill } from 'lucide-react';
 import { CalendarFastEntry } from './components/CalendarFastEntry';
 import { FastingChart } from './components/FastingChart';
 import { FastingStats } from './components/FastingStats';
 import { FastingHistory } from './components/FastingHistory';
 import { DataManager } from './components/DataManager';
 import { HealthTracker } from './components/HealthTracker';
+import { SupplementTracker } from './components/SupplementTracker';
 import { ThemeSelector } from './components/ThemeSelector';
 import { LoginForm } from './components/auth/LoginForm';
 import { RegisterForm } from './components/auth/RegisterForm';
@@ -244,7 +245,6 @@ function App() {
           onRegister={handleRegister}
           onSwitchToLogin={() => setAuthMode('login')}
           theme={theme}
-          onThemeChange={setTheme}
           isLoading={isLoading}
           error={error}
         />
@@ -256,7 +256,6 @@ function App() {
         onLogin={handleLogin}
         onSwitchToRegister={() => setAuthMode('register')}
         theme={theme}
-        onThemeChange={setTheme}
         isLoading={isLoading}
         error={error}
       />
@@ -268,6 +267,7 @@ function App() {
     { id: 'stats', label: 'Statistics', icon: <BarChart3 className="w-4 h-4" /> },
     { id: 'history', label: 'History', icon: <History className="w-4 h-4" /> },
     { id: 'health', label: 'Health', icon: <Activity className="w-4 h-4" /> },
+    { id: 'supplements', label: 'Supplements', icon: <Pill className="w-4 h-4" /> },
     { id: 'data', label: 'Data', icon: <Database className="w-4 h-4" /> },
     { id: 'profile', label: 'Profile', icon: <Settings className="w-4 h-4" /> },
     ...(user.isAdmin ? [{ id: 'admin', label: 'Admin', icon: <Shield className="w-4 h-4" /> }] : [])
@@ -284,7 +284,6 @@ function App() {
               <h1 className={`text-2xl font-bold ${isDarkTheme ? 'text-white' : 'text-gray-800'}`}>FastTrack</h1>
             </div>
             <div className="flex items-center space-x-4">
-              <ThemeSelector currentTheme={theme} onThemeChange={setTheme} />
               <div className={`flex items-center space-x-3 ${isDarkTheme ? 'text-gray-300' : 'text-gray-600'}`}>
                 {user.avatar && (
                   <img
@@ -358,10 +357,7 @@ function App() {
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {activeTab === 'calendar' && (
-          <div className="space-y-8">
-            <CalendarFastEntry onAddFast={handleAddFast} theme={theme} userId={user.id} />
-            {fasts.length > 0 && <FastingStats fasts={fasts} theme={theme} />}
-          </div>
+          <CalendarFastEntry onAddFast={handleAddFast} theme={theme} userId={user.id} />
         )}
 
         {activeTab === 'stats' && (
@@ -384,6 +380,10 @@ function App() {
           <HealthTracker fasts={fasts} theme={theme} user={user.id} />
         )}
 
+        {activeTab === 'supplements' && (
+          <SupplementTracker theme={theme} user={user.id} />
+        )}
+
         {activeTab === 'data' && (
           <DataManager 
             fasts={fasts} 
@@ -397,6 +397,7 @@ function App() {
           <ProfileSettings
             user={user}
             theme={theme}
+            onThemeChange={setTheme}
             onUserUpdate={handleUserUpdate}
           />
         )}

@@ -373,7 +373,7 @@ export function CalendarFastEntry({ onAddFast, theme, userId }: CalendarFastEntr
         </CardContent>
       </Card>
 
-      {/* Manual Fast Entry */}
+      {/* Manual Fast Entry - More compact on mobile */}
       <Card className={`bg-gradient-to-br ${themeClasses[theme as keyof typeof themeClasses]}`}>
         <CardContent>
           <div className="flex items-center mb-6">
@@ -381,15 +381,15 @@ export function CalendarFastEntry({ onAddFast, theme, userId }: CalendarFastEntr
             <h3 className={`text-xl font-bold ${isDarkTheme ? 'text-white' : 'text-gray-800'}`}>Add Past Fast</h3>
           </div>
           
-          <form onSubmit={handleSubmit} className="space-y-8">
-            {/* Start Date & Time */}
-            <div className={`rounded-xl p-6 shadow-sm border ${sectionClasses[theme as keyof typeof sectionClasses]}`}>
-              <h4 className={`text-lg font-semibold mb-4 flex items-center ${isDarkTheme ? 'text-white' : 'text-gray-800'}`}>
-                <Clock className="w-5 h-5 mr-2 text-green-600" />
+          <form onSubmit={handleSubmit} className="space-y-6">
+            {/* Start Date & Time - Compact on mobile */}
+            <div className={`rounded-xl p-4 md:p-6 shadow-sm border ${sectionClasses[theme as keyof typeof sectionClasses]}`}>
+              <h4 className={`text-base md:text-lg font-semibold mb-3 md:mb-4 flex items-center ${isDarkTheme ? 'text-white' : 'text-gray-800'}`}>
+                <Clock className="w-4 h-4 md:w-5 md:h-5 mr-2 text-green-600" />
                 Fast Start
               </h4>
               
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
                 {/* Start Date */}
                 <div>
                   <label className={`block text-sm font-medium mb-2 ${isDarkTheme ? 'text-gray-300' : 'text-gray-700'}`}>
@@ -399,10 +399,11 @@ export function CalendarFastEntry({ onAddFast, theme, userId }: CalendarFastEntr
                     type="button"
                     variant="outline"
                     onClick={() => setShowStartCalendar(!showStartCalendar)}
-                    className="w-full justify-start text-left"
+                    className="w-full justify-start text-left text-sm md:text-base"
                   >
                     <Calendar className="w-4 h-4 mr-2" />
-                    {format(startDate, 'EEEE, MMMM do, yyyy')}
+                    <span className="hidden md:inline">{format(startDate, 'EEEE, MMMM do, yyyy')}</span>
+                    <span className="md:hidden">{format(startDate, 'MMM dd, yyyy')}</span>
                   </Button>
                   
                   {showStartCalendar && (
@@ -427,7 +428,7 @@ export function CalendarFastEntry({ onAddFast, theme, userId }: CalendarFastEntr
                   <label className={`block text-sm font-medium mb-2 ${isDarkTheme ? 'text-gray-300' : 'text-gray-700'}`}>
                     Start Time: {formatTime(startHour)}
                   </label>
-                  <div className="space-y-4">
+                  <div className="space-y-2 md:space-y-4">
                     <div>
                       <label className={`block text-xs mb-1 ${isDarkTheme ? 'text-gray-400' : 'text-gray-500'}`}>Hour: {startHour}</label>
                       <input
@@ -444,14 +445,14 @@ export function CalendarFastEntry({ onAddFast, theme, userId }: CalendarFastEntr
               </div>
             </div>
 
-            {/* End Date & Time */}
-            <div className={`rounded-xl p-6 shadow-sm border ${sectionClasses[theme as keyof typeof sectionClasses]}`}>
-              <h4 className={`text-lg font-semibold mb-4 flex items-center ${isDarkTheme ? 'text-white' : 'text-gray-800'}`}>
-                <Clock className="w-5 h-5 mr-2 text-red-600" />
+            {/* End Date & Time - Compact on mobile */}
+            <div className={`rounded-xl p-4 md:p-6 shadow-sm border ${sectionClasses[theme as keyof typeof sectionClasses]}`}>
+              <h4 className={`text-base md:text-lg font-semibold mb-3 md:mb-4 flex items-center ${isDarkTheme ? 'text-white' : 'text-gray-800'}`}>
+                <Clock className="w-4 h-4 md:w-5 md:h-5 mr-2 text-red-600" />
                 Fast End
               </h4>
               
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
                 {/* End Date */}
                 <div>
                   <label className={`block text-sm font-medium mb-2 ${isDarkTheme ? 'text-gray-300' : 'text-gray-700'}`}>
@@ -461,10 +462,11 @@ export function CalendarFastEntry({ onAddFast, theme, userId }: CalendarFastEntr
                     type="button"
                     variant="outline"
                     onClick={() => setShowEndCalendar(!showEndCalendar)}
-                    className="w-full justify-start text-left"
+                    className="w-full justify-start text-left text-sm md:text-base"
                   >
                     <Calendar className="w-4 h-4 mr-2" />
-                    {format(endDate, 'EEEE, MMMM do, yyyy')}
+                    <span className="hidden md:inline">{format(endDate, 'EEEE, MMMM do, yyyy')}</span>
+                    <span className="md:hidden">{format(endDate, 'MMM dd, yyyy')}</span>
                   </Button>
                   
                   {showEndCalendar && (
@@ -489,7 +491,7 @@ export function CalendarFastEntry({ onAddFast, theme, userId }: CalendarFastEntr
                   <label className={`block text-sm font-medium mb-2 ${isDarkTheme ? 'text-gray-300' : 'text-gray-700'}`}>
                     End Time: {formatTime(endHour)}
                   </label>
-                  <div className="space-y-4">
+                  <div className="space-y-2 md:space-y-4">
                     <div>
                       <label className={`block text-xs mb-1 ${isDarkTheme ? 'text-gray-400' : 'text-gray-500'}`}>Hour: {endHour}</label>
                       <input
@@ -506,49 +508,49 @@ export function CalendarFastEntry({ onAddFast, theme, userId }: CalendarFastEntr
               </div>
             </div>
 
-            {/* Notes Section */}
-            <div className={`rounded-xl p-6 shadow-sm border ${sectionClasses[theme as keyof typeof sectionClasses]}`}>
-              <h4 className={`text-lg font-semibold mb-4 ${isDarkTheme ? 'text-white' : 'text-gray-800'}`}>
+            {/* Notes Section - Compact on mobile */}
+            <div className={`rounded-xl p-4 md:p-6 shadow-sm border ${sectionClasses[theme as keyof typeof sectionClasses]}`}>
+              <h4 className={`text-base md:text-lg font-semibold mb-3 md:mb-4 ${isDarkTheme ? 'text-white' : 'text-gray-800'}`}>
                 Fast Notes (Optional)
               </h4>
               <textarea
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 placeholder="How did this fast go? Any observations, challenges, or victories..."
-                className={`w-full h-24 p-3 border rounded-lg resize-none ${
+                className={`w-full h-20 md:h-24 p-3 border rounded-lg resize-none text-sm md:text-base ${
                   isDarkTheme 
                     ? 'bg-gray-600 border-gray-500 text-white placeholder-gray-400' 
                     : 'bg-white border-gray-300 text-gray-800 placeholder-gray-500'
                 } focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500`}
               />
-              <p className={`text-sm mt-2 ${isDarkTheme ? 'text-gray-400' : 'text-gray-500'}`}>
+              <p className={`text-xs md:text-sm mt-2 ${isDarkTheme ? 'text-gray-400' : 'text-gray-500'}`}>
                 Add personal notes about your fasting experience
               </p>
             </div>
 
-            {/* Duration Preview */}
-            <div className={`rounded-xl p-6 border ${sectionClasses[theme as keyof typeof sectionClasses]}`}>
-              <h4 className={`text-lg font-semibold mb-2 ${isDarkTheme ? 'text-white' : 'text-gray-800'}`}>Fast Duration</h4>
+            {/* Duration Preview - Compact on mobile */}
+            <div className={`rounded-xl p-4 md:p-6 border ${sectionClasses[theme as keyof typeof sectionClasses]}`}>
+              <h4 className={`text-base md:text-lg font-semibold mb-2 ${isDarkTheme ? 'text-white' : 'text-gray-800'}`}>Fast Duration</h4>
               {duration.total > 0 ? (
                 <div className="text-center">
-                  <p className={`text-3xl font-bold ${iconColors[theme as keyof typeof iconColors]}`}>
+                  <p className={`text-2xl md:text-3xl font-bold ${iconColors[theme as keyof typeof iconColors]}`}>
                     {Math.round(duration.total)} hours
                   </p>
-                  <p className={`text-sm mt-1 ${isDarkTheme ? 'text-gray-400' : 'text-gray-600'}`}>
+                  <p className={`text-xs md:text-sm mt-1 ${isDarkTheme ? 'text-gray-400' : 'text-gray-600'}`}>
                     {duration.hours}h {duration.minutes}m exactly
                   </p>
                 </div>
               ) : (
-                <p className="text-red-500 text-center">Please ensure end time is after start time</p>
+                <p className="text-red-500 text-center text-sm md:text-base">Please ensure end time is after start time</p>
               )}
             </div>
 
             <Button 
               type="submit" 
-              className="w-full py-3 text-lg"
+              className="w-full py-3 text-base md:text-lg"
               disabled={duration.total <= 0}
             >
-              <Plus className="w-5 h-5 mr-2" />
+              <Plus className="w-4 h-4 md:w-5 md:h-5 mr-2" />
               Add Fast to History
             </Button>
           </form>

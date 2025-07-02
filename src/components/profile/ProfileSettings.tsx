@@ -4,16 +4,18 @@ import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { User, Settings, Eye, EyeOff, Save, Shield } from 'lucide-react';
 import { AvatarUpload } from '../auth/AvatarUpload';
+import { ThemeSelector } from '../ThemeSelector';
 import { authService } from '../../services/authService';
 import { User as UserType } from '../../types/auth';
 
 interface ProfileSettingsProps {
   user: UserType;
   theme: string;
+  onThemeChange: (theme: string) => void;
   onUserUpdate: (user: UserType) => void;
 }
 
-export function ProfileSettings({ user, theme, onUserUpdate }: ProfileSettingsProps) {
+export function ProfileSettings({ user, theme, onThemeChange, onUserUpdate }: ProfileSettingsProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -185,6 +187,16 @@ export function ProfileSettings({ user, theme, onUserUpdate }: ProfileSettingsPr
         )}
 
         <div className="space-y-8">
+          {/* Theme Selection */}
+          <div className={`${isDarkTheme ? 'bg-gray-700/80' : 'bg-white/90'} rounded-xl p-6`}>
+            <h3 className={`text-lg font-semibold mb-4 ${isDarkTheme ? 'text-white' : 'text-gray-800'}`}>
+              Theme Preferences
+            </h3>
+            <div className="flex justify-center">
+              <ThemeSelector currentTheme={theme} onThemeChange={onThemeChange} />
+            </div>
+          </div>
+
           {/* Avatar Section */}
           <div className={`${isDarkTheme ? 'bg-gray-700/80' : 'bg-white/90'} rounded-xl p-6`}>
             <h3 className={`text-lg font-semibold mb-4 ${isDarkTheme ? 'text-white' : 'text-gray-800'}`}>
