@@ -2,10 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent } from './ui/Card';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
-import { Pill, Plus, Trash2, Calendar, Clock, BarChart3, TrendingUp } from 'lucide-react';
+import { Pill, Plus, Trash2, Calendar, Clock, BarChart3, TrendingUp, ChevronLeft, ChevronRight, Filter } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { format } from 'date-fns';
+import { format, isSameDay } from 'date-fns';
+import { DayPicker } from 'react-day-picker';
 import { apiService } from '../services/apiService';
+import 'react-day-picker/dist/style.css';
 
 interface SupplementEntry {
   id: string;
@@ -26,6 +28,15 @@ export function SupplementTracker({ theme, user }: SupplementTrackerProps) {
   const [selectedSupplement, setSelectedSupplement] = useState<string>('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'add' | 'history' | 'calendar'>('add');
+  
+  // Chart state
+  const [chartFilter, setChartFilter] = useState<'10' | '20'>('10');
+  const [chartOffset, setChartOffset] = useState(0);
+  
+  // Calendar state
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [showCalendar, setShowCalendar] = useState(false);
   
   // Form state
   const [formData, setFormData] = useState({
@@ -35,6 +46,9 @@ export function SupplementTracker({ theme, user }: SupplementTrackerProps) {
     time: format(new Date(), 'HH:mm'),
     notes: ''
   });
+
+  // Suggestions for supplement names
+  const [showSuggestions, setShowSuggestions] = useState(false);
 
   const isDarkTheme = theme === 'dark' || theme === 'midnight';
 
@@ -79,6 +93,15 @@ export function SupplementTracker({ theme, user }: SupplementTrackerProps) {
     }
   };
 
+  // Get unique supplement names for suggestions and selection
+  const uniqueSupplements = Array.from(new Set(supplements.map(s => s.name))).sort();
+
+  // Filter suggestions based on current input
+  const filteredSuggestions = uniqueSupplements.filter(name =>
+    name.toLowerCase().includes(formData.name.toLowerCase()) && 
+    name.toLowerCase() !== formData.name.toLowerCase()
+  );
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -105,14 +128,15 @@ export function SupplementTracker({ theme, user }: SupplementTrackerProps) {
       
       setSupplements(prev => [newSupplement, ...prev]);
       
-      // Reset form
-      setFormData({
-        name: '',
+      // Reset form but keep the supplement name for easy re-entry
+      setFormData(prev => ({
+        name: prev.name, // Keep the supplement name
         quantity: '',
-        unit: 'mg',
+        unit: prev.unit, // Keep the unit
         time: format(new Date(), 'HH:mm'),
         notes: ''
-      });
+      }));
+      setShowSuggestions(false);
     } catch (error) {
       console.error('Failed to save supplement:', error);
       setError('Failed to save supplement. Please try again.');
@@ -134,19 +158,36 @@ export function SupplementTracker({ theme, user }: SupplementTrackerProps) {
     }
   };
 
-  // Get unique supplement names for selection
-  const uniqueSupplements = Array.from(new Set(supplements.map(s => s.name))).sort();
+  const handleNameChange = (value: string) => {
+    setFormData(prev => ({ ...prev, name: value }));
+    setShowSuggestions(value.length > 0 && filteredSuggestions.length > 0);
+  };
 
-  // Prepare chart data for selected supplement
+  const selectSuggestion = (name: string) => {
+    // Find the most recent entry for this supplement to get common unit
+    const recentEntry = supplements.find(s => s.name === name);
+    setFormData(prev => ({ 
+      ...prev, 
+      name,
+      unit: recentEntry?.unit || prev.unit
+    }));
+    setShowSuggestions(false);
+  };
+
+  // Prepare chart data for selected supplement with pagination
   const getChartData = () => {
     if (!selectedSupplement) return [];
     
     const filteredSupplements = supplements
       .filter(s => s.name === selectedSupplement)
-      .sort((a, b) => a.time.getTime() - b.time.getTime())
-      .slice(-30); // Last 30 entries
+      .sort((a, b) => a.time.getTime() - b.time.getTime());
     
-    return filteredSupplements.map(supplement => ({
+    const filterNum = parseInt(chartFilter);
+    const startIndex = chartOffset;
+    const endIndex = chartOffset + filterNum;
+    const paginatedSupplements = filteredSupplements.slice(startIndex, endIndex);
+    
+    return paginatedSupplements.map(supplement => ({
       date: format(supplement.time, 'MMM dd'),
       time: format(supplement.time, 'HH:mm'),
       quantity: supplement.quantity,
@@ -156,6 +197,29 @@ export function SupplementTracker({ theme, user }: SupplementTrackerProps) {
   };
 
   const chartData = getChartData();
+  
+  // Chart navigation
+  const selectedSupplementEntries = supplements.filter(s => s.name === selectedSupplement);
+  const canScrollBack = chartOffset > 0;
+  const canScrollForward = chartOffset + parseInt(chartFilter) < selectedSupplementEntries.length;
+
+  const handleScrollChart = (direction: 'back' | 'forward') => {
+    const filterNum = parseInt(chartFilter);
+    if (direction === 'back' && canScrollBack) {
+      setChartOffset(Math.max(0, chartOffset - filterNum));
+    } else if (direction === 'forward' && canScrollForward) {
+      setChartOffset(chartOffset + filterNum);
+    }
+  };
+
+  // Get supplements for selected calendar date
+  const getSupplementsForDate = (date: Date) => {
+    return supplements.filter(supplement => 
+      isSameDay(supplement.time, date)
+    ).sort((a, b) => a.time.getTime() - b.time.getTime());
+  };
+
+  const supplementsForSelectedDate = getSupplementsForDate(selectedDate);
 
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
@@ -176,6 +240,12 @@ export function SupplementTracker({ theme, user }: SupplementTrackerProps) {
     }
     return null;
   };
+
+  const tabs = [
+    { id: 'add', label: 'Add', icon: <Plus className="w-4 h-4" /> },
+    { id: 'history', label: 'History', icon: <BarChart3 className="w-4 h-4" /> },
+    { id: 'calendar', label: 'Calendar', icon: <Calendar className="w-4 h-4" /> }
+  ];
 
   return (
     <Card className={`bg-gradient-to-br ${themeClasses[theme as keyof typeof themeClasses]}`}>
@@ -206,8 +276,26 @@ export function SupplementTracker({ theme, user }: SupplementTrackerProps) {
           </div>
         )}
 
-        <div className="space-y-8">
-          {/* Add Supplement Form */}
+        {/* Tab Navigation */}
+        <div className={`flex space-x-1 mb-6 ${isDarkTheme ? 'bg-gray-700/50' : 'bg-white/20'} rounded-lg p-1`}>
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as any)}
+              className={`flex items-center px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
+                activeTab === tab.id
+                  ? `${isDarkTheme ? 'bg-gray-600 text-white' : 'bg-white text-gray-800'} shadow-sm`
+                  : `${isDarkTheme ? 'text-gray-300 hover:text-white hover:bg-gray-600/50' : 'text-gray-600 hover:text-gray-800 hover:bg-white/30'}`
+              }`}
+            >
+              {tab.icon}
+              <span className="ml-2">{tab.label}</span>
+            </button>
+          ))}
+        </div>
+
+        {/* Add Supplement Tab */}
+        {activeTab === 'add' && (
           <div className={`${isDarkTheme ? 'bg-gray-700/80' : 'bg-white/90'} rounded-xl p-6`}>
             <h3 className={`text-lg font-semibold mb-4 ${isDarkTheme ? 'text-white' : 'text-gray-800'}`}>
               Add Supplement
@@ -215,15 +303,41 @@ export function SupplementTracker({ theme, user }: SupplementTrackerProps) {
             
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Input
-                  type="text"
-                  label="Supplement Name"
-                  placeholder="e.g., Vitamin D, Magnesium"
-                  value={formData.name}
-                  onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                  required
-                  className={isDarkTheme ? 'bg-gray-600 border-gray-500 text-white placeholder-gray-400' : ''}
-                />
+                <div className="relative">
+                  <Input
+                    type="text"
+                    label="Supplement Name"
+                    placeholder="e.g., Vitamin D, Magnesium"
+                    value={formData.name}
+                    onChange={(e) => handleNameChange(e.target.value)}
+                    onFocus={() => setShowSuggestions(formData.name.length > 0 && filteredSuggestions.length > 0)}
+                    onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                    required
+                    className={isDarkTheme ? 'bg-gray-600 border-gray-500 text-white placeholder-gray-400' : ''}
+                  />
+                  
+                  {/* Suggestions Dropdown */}
+                  {showSuggestions && filteredSuggestions.length > 0 && (
+                    <div className={`absolute z-10 w-full mt-1 rounded-lg shadow-lg border max-h-40 overflow-y-auto ${
+                      isDarkTheme ? 'bg-gray-700 border-gray-600' : 'bg-white border-gray-200'
+                    }`}>
+                      {filteredSuggestions.map((name, index) => (
+                        <button
+                          key={index}
+                          type="button"
+                          onClick={() => selectSuggestion(name)}
+                          className={`w-full text-left px-4 py-2 hover:bg-opacity-50 ${
+                            isDarkTheme 
+                              ? 'text-white hover:bg-gray-600' 
+                              : 'text-gray-800 hover:bg-gray-100'
+                          }`}
+                        >
+                          {name}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
                 
                 <div className="grid grid-cols-2 gap-2">
                   <Input
@@ -290,139 +404,327 @@ export function SupplementTracker({ theme, user }: SupplementTrackerProps) {
               </Button>
             </form>
           </div>
+        )}
 
-          {/* Chart Section */}
-          {uniqueSupplements.length > 0 && (
-            <div className={`${isDarkTheme ? 'bg-gray-700/80' : 'bg-white/90'} rounded-xl p-6`}>
-              <div className="flex items-center justify-between mb-4">
-                <h3 className={`text-lg font-semibold ${isDarkTheme ? 'text-white' : 'text-gray-800'}`}>
-                  Supplement History
-                </h3>
-                <div className="flex items-center space-x-2">
-                  <BarChart3 className={`w-4 h-4 ${isDarkTheme ? 'text-gray-400' : 'text-gray-500'}`} />
-                  <select
-                    value={selectedSupplement}
-                    onChange={(e) => setSelectedSupplement(e.target.value)}
-                    className={`px-3 py-1 rounded border text-sm ${
-                      isDarkTheme 
-                        ? 'bg-gray-600 border-gray-500 text-white' 
-                        : 'bg-white border-gray-300 text-gray-800'
-                    }`}
-                  >
-                    <option value="">Select supplement</option>
-                    {uniqueSupplements.map(name => (
-                      <option key={name} value={name}>{name}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {selectedSupplement && chartData.length > 0 && (
-                <div className="h-64">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={chartData}>
-                      <CartesianGrid strokeDasharray="3 3" stroke={isDarkTheme ? '#374151' : '#e5e7eb'} />
-                      <XAxis 
-                        dataKey="date"
-                        stroke={isDarkTheme ? '#9ca3af' : '#6b7280'}
-                        fontSize={12}
-                      />
-                      <YAxis 
-                        stroke={isDarkTheme ? '#9ca3af' : '#6b7280'}
-                        fontSize={12}
-                        label={{ 
-                          value: chartData[0]?.unit || 'Quantity', 
-                          angle: -90, 
-                          position: 'insideLeft',
-                          style: { textAnchor: 'middle' }
+        {/* History Tab */}
+        {activeTab === 'history' && (
+          <div className="space-y-6">
+            {/* Chart Section */}
+            {uniqueSupplements.length > 0 && (
+              <div className={`${isDarkTheme ? 'bg-gray-700/80' : 'bg-white/90'} rounded-xl p-6`}>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className={`text-lg font-semibold ${isDarkTheme ? 'text-white' : 'text-gray-800'}`}>
+                    Supplement History
+                  </h3>
+                  
+                  <div className="flex items-center space-x-4">
+                    {/* Supplement Selection */}
+                    <div className="flex items-center space-x-2">
+                      <BarChart3 className={`w-4 h-4 ${isDarkTheme ? 'text-gray-400' : 'text-gray-500'}`} />
+                      <select
+                        value={selectedSupplement}
+                        onChange={(e) => {
+                          setSelectedSupplement(e.target.value);
+                          setChartOffset(0); // Reset offset when changing supplement
                         }}
-                      />
-                      <Tooltip content={<CustomTooltip />} />
-                      <Line 
-                        type="monotone" 
-                        dataKey="quantity" 
-                        stroke="#8b5cf6" 
-                        strokeWidth={3}
-                        dot={{ fill: '#8b5cf6', strokeWidth: 2, r: 4 }}
-                        activeDot={{ r: 6, stroke: '#8b5cf6', strokeWidth: 2, fill: '#ffffff' }}
-                      />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
-              )}
-
-              {selectedSupplement && chartData.length === 0 && (
-                <p className={`text-center py-8 ${isDarkTheme ? 'text-gray-400' : 'text-gray-500'}`}>
-                  No data available for {selectedSupplement}
-                </p>
-              )}
-            </div>
-          )}
-
-          {/* Recent Entries */}
-          <div className={`${isDarkTheme ? 'bg-gray-700/80' : 'bg-white/90'} rounded-xl p-6`}>
-            <h3 className={`text-lg font-semibold mb-4 ${isDarkTheme ? 'text-white' : 'text-gray-800'}`}>
-              Recent Supplements
-            </h3>
-            
-            {supplements.length === 0 ? (
-              <p className={`text-center py-8 ${isDarkTheme ? 'text-gray-400' : 'text-gray-500'}`}>
-                No supplements recorded yet
-              </p>
-            ) : (
-              <div className="space-y-3">
-                {supplements.slice(0, 10).map((supplement) => (
-                  <div
-                    key={supplement.id}
-                    className={`flex items-center justify-between p-4 rounded-lg ${
-                      isDarkTheme ? 'bg-gray-600/50' : 'bg-gray-50'
-                    }`}
-                  >
-                    <div className="flex items-center space-x-4">
-                      <Pill className={`w-5 h-5 ${iconColors[theme as keyof typeof iconColors]}`} />
-                      <div>
-                        <p className={`font-semibold ${isDarkTheme ? 'text-white' : 'text-gray-800'}`}>
-                          {supplement.name}
-                        </p>
-                        <p className={`text-sm ${isDarkTheme ? 'text-gray-400' : 'text-gray-600'}`}>
-                          {supplement.quantity} {supplement.unit}
-                          {supplement.notes && ` • ${supplement.notes}`}
-                        </p>
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-center space-x-4">
-                      <div className="text-right">
-                        <p className={`text-sm font-medium ${isDarkTheme ? 'text-white' : 'text-gray-800'}`}>
-                          {format(supplement.time, 'MMM dd, yyyy')}
-                        </p>
-                        <p className={`text-xs ${isDarkTheme ? 'text-gray-400' : 'text-gray-500'}`}>
-                          {format(supplement.time, 'h:mm a')}
-                        </p>
-                      </div>
-                      
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleDelete(supplement.id)}
-                        className="text-red-500 hover:text-red-700"
-                        disabled={isLoading}
+                        className={`px-3 py-1 rounded border text-sm ${
+                          isDarkTheme 
+                            ? 'bg-gray-600 border-gray-500 text-white' 
+                            : 'bg-white border-gray-300 text-gray-800'
+                        }`}
                       >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
+                        <option value="">Select supplement</option>
+                        {uniqueSupplements.map(name => (
+                          <option key={name} value={name}>{name}</option>
+                        ))}
+                      </select>
                     </div>
+
+                    {/* Filter and Navigation */}
+                    {selectedSupplement && (
+                      <>
+                        <div className="flex items-center space-x-2">
+                          <Filter className={`w-4 h-4 ${isDarkTheme ? 'text-gray-400' : 'text-gray-500'}`} />
+                          <select
+                            value={chartFilter}
+                            onChange={(e) => {
+                              setChartFilter(e.target.value as '10' | '20');
+                              setChartOffset(0); // Reset offset when changing filter
+                            }}
+                            className={`px-3 py-1 rounded border text-sm ${
+                              isDarkTheme 
+                                ? 'bg-gray-600 border-gray-500 text-white' 
+                                : 'bg-white border-gray-300 text-gray-800'
+                            }`}
+                          >
+                            <option value="10">Last 10</option>
+                            <option value="20">Last 20</option>
+                          </select>
+                        </div>
+                        
+                        <div className="flex items-center space-x-1">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleScrollChart('back')}
+                            disabled={!canScrollBack}
+                            className={`p-2 ${isDarkTheme ? 'border-gray-600 text-gray-300 hover:bg-gray-700' : ''}`}
+                          >
+                            <ChevronLeft className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleScrollChart('forward')}
+                            disabled={!canScrollForward}
+                            className={`p-2 ${isDarkTheme ? 'border-gray-600 text-gray-300 hover:bg-gray-700' : ''}`}
+                          >
+                            <ChevronRight className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </>
+                    )}
                   </div>
-                ))}
-                
-                {supplements.length > 10 && (
-                  <p className={`text-center text-sm ${isDarkTheme ? 'text-gray-400' : 'text-gray-500'}`}>
-                    Showing latest 10 entries of {supplements.length} total
+                </div>
+
+                {selectedSupplement && chartData.length > 0 && (
+                  <>
+                    <div className="h-64">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={chartData}>
+                          <CartesianGrid strokeDasharray="3 3" stroke={isDarkTheme ? '#374151' : '#e5e7eb'} />
+                          <XAxis 
+                            dataKey="date"
+                            stroke={isDarkTheme ? '#9ca3af' : '#6b7280'}
+                            fontSize={12}
+                          />
+                          <YAxis 
+                            stroke={isDarkTheme ? '#9ca3af' : '#6b7280'}
+                            fontSize={12}
+                            label={{ 
+                              value: chartData[0]?.unit || 'Quantity', 
+                              angle: -90, 
+                              position: 'insideLeft',
+                              style: { textAnchor: 'middle' }
+                            }}
+                          />
+                          <Tooltip content={<CustomTooltip />} />
+                          <Line 
+                            type="monotone" 
+                            dataKey="quantity" 
+                            stroke="#8b5cf6" 
+                            strokeWidth={3}
+                            dot={{ fill: '#8b5cf6', strokeWidth: 2, r: 4 }}
+                            activeDot={{ r: 6, stroke: '#8b5cf6', strokeWidth: 2, fill: '#ffffff' }}
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+                    <div className="mt-4 text-center">
+                      <p className={`text-sm ${isDarkTheme ? 'text-gray-400' : 'text-gray-600'}`}>
+                        Showing entries {chartOffset + 1}-{Math.min(chartOffset + parseInt(chartFilter), selectedSupplementEntries.length)} of {selectedSupplementEntries.length} total
+                      </p>
+                    </div>
+                  </>
+                )}
+
+                {selectedSupplement && chartData.length === 0 && (
+                  <p className={`text-center py-8 ${isDarkTheme ? 'text-gray-400' : 'text-gray-500'}`}>
+                    No data available for {selectedSupplement} in this range
+                  </p>
+                )}
+
+                {!selectedSupplement && (
+                  <p className={`text-center py-8 ${isDarkTheme ? 'text-gray-400' : 'text-gray-500'}`}>
+                    Select a supplement to view its history
                   </p>
                 )}
               </div>
             )}
+
+            {/* Recent Entries */}
+            <div className={`${isDarkTheme ? 'bg-gray-700/80' : 'bg-white/90'} rounded-xl p-6`}>
+              <h3 className={`text-lg font-semibold mb-4 ${isDarkTheme ? 'text-white' : 'text-gray-800'}`}>
+                Recent Supplements
+              </h3>
+              
+              {supplements.length === 0 ? (
+                <p className={`text-center py-8 ${isDarkTheme ? 'text-gray-400' : 'text-gray-500'}`}>
+                  No supplements recorded yet
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  {supplements.slice(0, 10).map((supplement) => (
+                    <div
+                      key={supplement.id}
+                      className={`flex items-center justify-between p-4 rounded-lg ${
+                        isDarkTheme ? 'bg-gray-600/50' : 'bg-gray-50'
+                      }`}
+                    >
+                      <div className="flex items-center space-x-4">
+                        <Pill className={`w-5 h-5 ${iconColors[theme as keyof typeof iconColors]}`} />
+                        <div>
+                          <p className={`font-semibold ${isDarkTheme ? 'text-white' : 'text-gray-800'}`}>
+                            {supplement.name}
+                          </p>
+                          <p className={`text-sm ${isDarkTheme ? 'text-gray-400' : 'text-gray-600'}`}>
+                            {supplement.quantity} {supplement.unit}
+                            {supplement.notes && ` • ${supplement.notes}`}
+                          </p>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center space-x-4">
+                        <div className="text-right">
+                          <p className={`text-sm font-medium ${isDarkTheme ? 'text-white' : 'text-gray-800'}`}>
+                            {format(supplement.time, 'MMM dd, yyyy')}
+                          </p>
+                          <p className={`text-xs ${isDarkTheme ? 'text-gray-400' : 'text-gray-500'}`}>
+                            {format(supplement.time, 'h:mm a')}
+                          </p>
+                        </div>
+                        
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDelete(supplement.id)}
+                          className="text-red-500 hover:text-red-700"
+                          disabled={isLoading}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                  
+                  {supplements.length > 10 && (
+                    <p className={`text-center text-sm ${isDarkTheme ? 'text-gray-400' : 'text-gray-500'}`}>
+                      Showing latest 10 entries of {supplements.length} total
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
-        </div>
+        )}
+
+        {/* Calendar Tab */}
+        {activeTab === 'calendar' && (
+          <div className="space-y-6">
+            {/* Date Selection */}
+            <div className={`${isDarkTheme ? 'bg-gray-700/80' : 'bg-white/90'} rounded-xl p-6`}>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className={`text-lg font-semibold ${isDarkTheme ? 'text-white' : 'text-gray-800'}`}>
+                  Select Date
+                </h3>
+                <Button
+                  variant="outline"
+                  onClick={() => setShowCalendar(!showCalendar)}
+                  className={`${isDarkTheme ? 'border-gray-600 text-gray-300 hover:bg-gray-600' : ''}`}
+                >
+                  <Calendar className="w-4 h-4 mr-2" />
+                  {format(selectedDate, 'MMM dd, yyyy')}
+                </Button>
+              </div>
+
+              {showCalendar && (
+                <div className={`p-4 border rounded-lg ${
+                  isDarkTheme ? 'bg-gray-600 border-gray-500 dark-theme' : 'bg-white border-gray-200'
+                }`}>
+                  <DayPicker
+                    mode="single"
+                    selected={selectedDate}
+                    onSelect={(date) => {
+                      if (date) {
+                        setSelectedDate(date);
+                        setShowCalendar(false);
+                      }
+                    }}
+                    className="mx-auto"
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Supplements for Selected Date */}
+            <div className={`${isDarkTheme ? 'bg-gray-700/80' : 'bg-white/90'} rounded-xl p-6`}>
+              <h3 className={`text-lg font-semibold mb-4 ${isDarkTheme ? 'text-white' : 'text-gray-800'}`}>
+                Supplements on {format(selectedDate, 'EEEE, MMMM do, yyyy')}
+              </h3>
+              
+              {supplementsForSelectedDate.length === 0 ? (
+                <div className="text-center py-8">
+                  <Pill className={`w-12 h-12 mx-auto mb-4 ${isDarkTheme ? 'text-gray-500' : 'text-gray-300'}`} />
+                  <p className={`${isDarkTheme ? 'text-gray-400' : 'text-gray-500'}`}>
+                    No supplements recorded for this date
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {supplementsForSelectedDate.map((supplement) => (
+                    <div
+                      key={supplement.id}
+                      className={`flex items-center justify-between p-4 rounded-lg ${
+                        isDarkTheme ? 'bg-gray-600/50' : 'bg-gray-50'
+                      }`}
+                    >
+                      <div className="flex items-center space-x-4">
+                        <div className={`w-3 h-3 rounded-full ${iconColors[theme as keyof typeof iconColors].replace('text-', 'bg-')}`} />
+                        <div>
+                          <p className={`font-semibold ${isDarkTheme ? 'text-white' : 'text-gray-800'}`}>
+                            {supplement.name}
+                          </p>
+                          <p className={`text-sm ${isDarkTheme ? 'text-gray-400' : 'text-gray-600'}`}>
+                            {supplement.quantity} {supplement.unit}
+                            {supplement.notes && ` • ${supplement.notes}`}
+                          </p>
+                        </div>
+                      </div>
+                      
+                      <div className="text-right">
+                        <p className={`text-sm font-medium ${isDarkTheme ? 'text-white' : 'text-gray-800'}`}>
+                          {format(supplement.time, 'h:mm a')}
+                        </p>
+                        <p className={`text-xs ${isDarkTheme ? 'text-gray-400' : 'text-gray-500'}`}>
+                          {format(supplement.time, 'MMM dd')}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Daily Summary */}
+              {supplementsForSelectedDate.length > 0 && (
+                <div className={`mt-6 p-4 rounded-lg ${isDarkTheme ? 'bg-gray-600/30' : 'bg-blue-50'}`}>
+                  <h4 className={`font-semibold mb-2 ${isDarkTheme ? 'text-white' : 'text-gray-800'}`}>
+                    Daily Summary
+                  </h4>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
+                    <div>
+                      <p className={`${isDarkTheme ? 'text-gray-400' : 'text-gray-600'}`}>Total Supplements</p>
+                      <p className={`font-bold ${isDarkTheme ? 'text-white' : 'text-gray-800'}`}>
+                        {supplementsForSelectedDate.length}
+                      </p>
+                    </div>
+                    <div>
+                      <p className={`${isDarkTheme ? 'text-gray-400' : 'text-gray-600'}`}>Unique Types</p>
+                      <p className={`font-bold ${isDarkTheme ? 'text-white' : 'text-gray-800'}`}>
+                        {new Set(supplementsForSelectedDate.map(s => s.name)).size}
+                      </p>
+                    </div>
+                    <div>
+                      <p className={`${isDarkTheme ? 'text-gray-400' : 'text-gray-600'}`}>First Taken</p>
+                      <p className={`font-bold ${isDarkTheme ? 'text-white' : 'text-gray-800'}`}>
+                        {format(supplementsForSelectedDate[0].time, 'h:mm a')}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
