@@ -23,6 +23,42 @@ A beautiful, full-featured intermittent fasting tracker with persistent data sto
 - Port 3004 available (change in docker-compose file to whatever)
 
 ```
+### Docker Compose example
+version: '3.8'
+
+services:
+  fasttrack:
+    image: proteinman81/fasttrack:latest
+    container_name: fasttrack
+    ports:
+      - "3004:80"
+    volumes:
+      - /fasttrack:/data
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - DATA_DIR=/data/app_data
+      - PORT=3001
+      - JWT_SECRET=your-production-jwt-secret-change-this
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.fasttrack.rule=Host(`fasttrack.localhost`)"
+      - "traefik.http.services.fasttrack.loadbalancer.server.port=80"
+
+volumes:
+  fasttrack-data:
+    driver: local
+
+networks:
+  default:
+    name: fasttrack-network
+
 ### Easy Deployment
 For ease of deployment
 git clone https://github.com/theqldcoalminer/fasttrack.git
