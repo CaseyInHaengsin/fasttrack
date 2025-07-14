@@ -37,64 +37,31 @@ class AuthService {
     }
   }
 
-  private async makeRequest(endpoint: string, options: RequestInit = {}): Promise<Response> {
-    const url = `${this.API_BASE_URL}${endpoint}`;
-    
-    const defaultHeaders: Record<string, string> = {
-      'Content-Type': 'application/json',
-    };
-
-    if (this.authToken) {
-      defaultHeaders['Authorization'] = `Bearer ${this.authToken}`;
-    }
-
-    const response = await fetch(url, {
-      ...options,
-      headers: {
-        ...defaultHeaders,
-        ...options.headers,
-      },
-    });
-
-    // Check if response is HTML (error page) instead of JSON
-    const contentType = response.headers.get('content-type');
-    if (contentType && contentType.includes('text/html')) {
-      console.error('Received HTML response instead of JSON:', {
-        url,
-        status: response.status,
-        statusText: response.statusText
-      });
-      throw new Error(`API endpoint not found: ${endpoint}. Server returned HTML instead of JSON.`);
-    }
-
-    return response;
-  }
-
   private async loadCurrentUser(): Promise<void> {
     if (!this.authToken) {
       throw new Error('No auth token available');
     }
 
-    try {
-      const response = await this.makeRequest('/me');
-
-      if (response.ok) {
-        const data = await response.json();
-        this.currentUser = {
-          ...data.user,
-          createdAt: new Date(data.user.createdAt),
-          lastLogin: data.user.lastLogin ? new Date(data.user.lastLogin) : undefined
-        };
-        console.log(`👤 Loaded user profile: ${this.currentUser.username}`);
-      } else if (response.status === 401) {
-        // Token is invalid or expired
-        throw new Error('Invalid or expired token');
-      } else {
-        throw new Error(`Failed to load user: ${response.status}`);
+    const response = await fetch(`${this.API_BASE_URL}/me`, {
+      headers: {
+        'Authorization': `Bearer ${this.authToken}`,
+        'Content-Type': 'application/json'
       }
-    } catch (error) {
-      console.error('Error loading current user:', error);
-      throw error;
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      this.currentUser = {
+        ...data.user,
+        createdAt: new Date(data.user.createdAt),
+        lastLogin: data.user.lastLogin ? new Date(data.user.lastLogin) : undefined
+      };
+      console.log(`👤 Loaded user profile: ${this.currentUser.username}`);
+    } else if (response.status === 401) {
+      // Token is invalid or expired
+      throw new Error('Invalid or expired token');
+    } else {
+      throw new Error(`Failed to load user: ${response.status}`);
     }
   }
 
@@ -132,36 +99,34 @@ class AuthService {
       throw new Error('Valid email address is required');
     }
 
-    try {
-      const response = await this.makeRequest('/register', {
-        method: 'POST',
-        body: JSON.stringify({
-          username: data.username.trim(),
-          email: data.email.toLowerCase().trim(),
-          password: data.password,
-          confirmPassword: data.confirmPassword
-        })
-      });
+    const response = await fetch(`${this.API_BASE_URL}/register`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        username: data.username.trim(),
+        email: data.email.toLowerCase().trim(),
+        password: data.password,
+        confirmPassword: data.confirmPassword
+      })
+    });
 
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({ error: 'Registration failed' }));
-        throw new Error(error.error || 'Registration failed');
-      }
-
-      const result = await response.json();
-      const user = {
-        ...result.user,
-        createdAt: new Date(result.user.createdAt),
-        lastLogin: result.user.lastLogin ? new Date(result.user.lastLogin) : undefined
-      };
-
-      this.setAuth(user, result.token);
-      console.log(`✅ User registered successfully: ${user.username}`);
-      return user;
-    } catch (error) {
-      console.error('Registration error:', error);
-      throw error;
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Registration failed');
     }
+
+    const result = await response.json();
+    const user = {
+      ...result.user,
+      createdAt: new Date(result.user.createdAt),
+      lastLogin: result.user.lastLogin ? new Date(result.user.lastLogin) : undefined
+    };
+
+    this.setAuth(user, result.token);
+    console.log(`✅ User registered successfully: ${user.username}`);
+    return user;
   }
 
   async login(credentials: LoginCredentials): Promise<User> {
@@ -171,36 +136,32 @@ class AuthService {
       throw new Error('Username and password are required');
     }
 
-    try {
-      console.log('🔑 Attempting login for:', credentials.username);
-      
-      const response = await this.makeRequest('/login', {
-        method: 'POST',
-        body: JSON.stringify({
-          username: credentials.username.trim(),
-          password: credentials.password
-        })
-      });
+    const response = await fetch(`${this.API_BASE_URL}/login`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        username: credentials.username.trim(),
+        password: credentials.password
+      })
+    });
 
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({ error: 'Login failed' }));
-        throw new Error(error.error || 'Login failed');
-      }
-
-      const result = await response.json();
-      const user = {
-        ...result.user,
-        createdAt: new Date(result.user.createdAt),
-        lastLogin: result.user.lastLogin ? new Date(result.user.lastLogin) : undefined
-      };
-
-      this.setAuth(user, result.token);
-      console.log(`✅ User logged in successfully: ${user.username}`);
-      return user;
-    } catch (error) {
-      console.error('Login error:', error);
-      throw error;
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Login failed');
     }
+
+    const result = await response.json();
+    const user = {
+      ...result.user,
+      createdAt: new Date(result.user.createdAt),
+      lastLogin: result.user.lastLogin ? new Date(result.user.lastLogin) : undefined
+    };
+
+    this.setAuth(user, result.token);
+    console.log(`✅ User logged in successfully: ${user.username}`);
+    return user;
   }
 
   async logout(): Promise<void> {
@@ -208,8 +169,12 @@ class AuthService {
 
     if (this.authToken) {
       try {
-        await this.makeRequest('/logout', {
-          method: 'POST'
+        await fetch(`${this.API_BASE_URL}/logout`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${this.authToken}`,
+            'Content-Type': 'application/json'
+          }
         });
         console.log('🚪 Logout request sent to server');
       } catch (error) {
@@ -256,7 +221,12 @@ class AuthService {
     
     // Verify token is still valid with server
     try {
-      const response = await this.makeRequest('/validate');
+      const response = await fetch(`${this.API_BASE_URL}/validate`, {
+        headers: {
+          'Authorization': `Bearer ${this.authToken}`,
+          'Content-Type': 'application/json'
+        }
+      });
       
       if (response.ok) {
         return true;
@@ -278,13 +248,17 @@ class AuthService {
       throw new Error('Not authenticated');
     }
 
-    const response = await this.makeRequest('/profile', {
+    const response = await fetch(`${this.API_BASE_URL}/profile`, {
       method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${this.authToken}`,
+        'Content-Type': 'application/json'
+      },
       body: JSON.stringify(updates)
     });
 
     if (!response.ok) {
-      const error = await response.json().catch(() => ({ error: 'Failed to update profile' }));
+      const error = await response.json();
       throw new Error(error.error || 'Failed to update profile');
     }
 
@@ -315,8 +289,12 @@ class AuthService {
       throw new Error('New password must be at least 6 characters long');
     }
 
-    const response = await this.makeRequest('/password', {
+    const response = await fetch(`${this.API_BASE_URL}/password`, {
       method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${this.authToken}`,
+        'Content-Type': 'application/json'
+      },
       body: JSON.stringify({
         currentPassword,
         newPassword
@@ -324,7 +302,7 @@ class AuthService {
     });
 
     if (!response.ok) {
-      const error = await response.json().catch(() => ({ error: 'Failed to change password' }));
+      const error = await response.json();
       throw new Error(error.error || 'Failed to change password');
     }
 
@@ -347,7 +325,7 @@ class AuthService {
     });
 
     if (!response.ok) {
-      const error = await response.json().catch(() => ({ error: 'Failed to fetch users' }));
+      const error = await response.json();
       throw new Error(error.error || 'Failed to fetch users');
     }
 
@@ -375,7 +353,7 @@ class AuthService {
     });
 
     if (!response.ok) {
-      const error = await response.json().catch(() => ({ error: 'Failed to delete user' }));
+      const error = await response.json();
       throw new Error(error.error || 'Failed to delete user');
     }
 
@@ -398,7 +376,7 @@ class AuthService {
     });
 
     if (!response.ok) {
-      const error = await response.json().catch(() => ({ error: 'Failed to update user' }));
+      const error = await response.json();
       throw new Error(error.error || 'Failed to update user');
     }
 
@@ -414,7 +392,12 @@ class AuthService {
     }
 
     try {
-      const response = await this.makeRequest('/sessions');
+      const response = await fetch(`${this.API_BASE_URL}/sessions`, {
+        headers: {
+          'Authorization': `Bearer ${this.authToken}`,
+          'Content-Type': 'application/json'
+        }
+      });
 
       if (response.ok) {
         return response.json();
@@ -433,15 +416,19 @@ class AuthService {
       throw new Error('Not authenticated');
     }
 
-    const response = await this.makeRequest('/logout-all', {
-      method: 'POST'
+    const response = await fetch(`${this.API_BASE_URL}/logout-all`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${this.authToken}`,
+        'Content-Type': 'application/json'
+      }
     });
 
     if (response.ok) {
       console.log('🚪 All sessions logged out');
       this.clearAuth();
     } else {
-      const error = await response.json().catch(() => ({ error: 'Failed to logout all sessions' }));
+      const error = await response.json();
       throw new Error(error.error || 'Failed to logout all sessions');
     }
   }

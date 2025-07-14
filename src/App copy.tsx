@@ -360,6 +360,7 @@ function App() {
         {activeTab === 'calendar' && (
           <div className="space-y-8">
             <CalendarFastEntry onAddFast={handleAddFast} theme={theme} userId={user.id} />
+            {fasts.length > 0 && <FastingStats fasts={fasts} theme={theme} />}
           </div>
         )}
 
@@ -397,7 +398,6 @@ function App() {
             user={user}
             theme={theme}
             onUserUpdate={handleUserUpdate}
-            onThemeChange={setTheme}
           />
         )}
 

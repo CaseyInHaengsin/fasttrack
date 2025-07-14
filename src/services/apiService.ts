@@ -19,15 +19,6 @@ interface WeightEntry {
   unit: 'kg' | 'lb';
 }
 
-interface SupplementEntry {
-  id: string;
-  name: string;
-  quantity: number;
-  unit: string;
-  time: Date;
-  notes?: string;
-}
-
 interface UserProfile {
   age: number;
   gender: 'male' | 'female';
@@ -179,36 +170,6 @@ class ApiService {
     });
   }
 
-  // Supplement methods
-  async getSupplements(userId: string): Promise<SupplementEntry[]> {
-    const supplements = await this.request<any[]>(`/supplements/${userId}`);
-    return supplements.map(supplement => ({
-      ...supplement,
-      time: new Date(supplement.time)
-    }));
-  }
-
-  async saveSupplement(userId: string, supplement: Omit<SupplementEntry, 'id'>): Promise<SupplementEntry> {
-    const savedSupplement = await this.request<any>(`/supplements/${userId}`, {
-      method: 'POST',
-      body: JSON.stringify({
-        ...supplement,
-        time: supplement.time.toISOString()
-      })
-    });
-
-    return {
-      ...savedSupplement,
-      time: new Date(savedSupplement.time)
-    };
-  }
-
-  async deleteSupplement(userId: string, supplementId: string): Promise<void> {
-    await this.request(`/supplements/${userId}/${supplementId}`, {
-      method: 'DELETE'
-    });
-  }
-
   // Profile methods
   async getProfile(userId: string): Promise<UserProfile | null> {
     return this.request<UserProfile | null>(`/profile/${userId}`);
@@ -225,7 +186,6 @@ class ApiService {
   async importData(userId: string, data: {
     fasts?: Fast[];
     weights?: WeightEntry[];
-    supplements?: SupplementEntry[];
     profile?: UserProfile;
   }): Promise<void> {
     const payload = {
@@ -237,10 +197,6 @@ class ApiService {
       weights: data.weights?.map(weight => ({
         ...weight,
         date: weight.date.toISOString()
-      })),
-      supplements: data.supplements?.map(supplement => ({
-        ...supplement,
-        time: supplement.time.toISOString()
       })),
       profile: data.profile
     };
@@ -254,7 +210,6 @@ class ApiService {
   async exportData(userId: string): Promise<{
     fasts: Fast[];
     weights: WeightEntry[];
-    supplements: SupplementEntry[];
     profile: UserProfile | null;
     exportedAt: string;
   }> {
@@ -270,10 +225,6 @@ class ApiService {
       weights: data.weights.map((weight: any) => ({
         ...weight,
         date: new Date(weight.date)
-      })),
-      supplements: data.supplements.map((supplement: any) => ({
-        ...supplement,
-        time: new Date(supplement.time)
       }))
     };
   }
