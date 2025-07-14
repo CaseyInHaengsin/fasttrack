@@ -327,6 +327,77 @@ app.delete('/api/weight/:userId/:weightId', async (req, res) => {
   }
 });
 
+// Get user's supplements
+app.get('/api/supplements/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    // Ensure user can only access their own data (or admin can access any)
+    if (userId !== req.user.id && !req.user.isAdmin) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    
+    const supplements = await readUserData(userId, 'supplements');
+    res.json(supplements);
+  } catch (error) {
+    console.error('Error fetching supplements:', error);
+    res.status(500).json({ error: 'Failed to fetch supplement data' });
+  }
+});
+
+// Save a new supplement
+app.post('/api/supplements/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    // Ensure user can only modify their own data
+    if (userId !== req.user.id) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    
+    const { name, quantity, unit, time, notes } = req.body;
+    
+    const supplements = await readUserData(userId, 'supplements');
+    const newSupplement = {
+      id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+      name,
+      quantity,
+      unit,
+      time,
+      notes: notes || '',
+      createdAt: new Date().toISOString()
+    };
+    
+    supplements.push(newSupplement);
+    await writeUserData(userId, 'supplements', supplements);
+    
+    res.json(newSupplement);
+  } catch (error) {
+    console.error('Error saving supplement:', error);
+    res.status(500).json({ error: 'Failed to save supplement' });
+  }
+});
+
+// Delete a supplement
+app.delete('/api/supplements/:userId/:supplementId', async (req, res) => {
+  try {
+    const { userId, supplementId } = req.params;
+    
+    // Ensure user can only modify their own data
+    if (userId !== req.user.id) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    
+    const supplements = await readUserData(userId, 'supplements');
+    const updatedSupplements = supplements.filter(supplement => supplement.id !== supplementId);
+    await writeUserData(userId, 'supplements', updatedSupplements);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting supplement:', error);
+    res.status(500).json({ error: 'Failed to delete supplement' });
+  }
+});
+
 // Get user's health profile
 app.get('/api/profile/:userId', async (req, res) => {
   try {
@@ -378,7 +449,7 @@ app.post('/api/import/:userId', async (req, res) => {
       return res.status(403).json({ error: 'Access denied' });
     }
     
-    const { fasts, weights, profile } = req.body;
+    const { fasts, weights, supplements, profile } = req.body;
     
     if (fasts && fasts.length > 0) {
       const existingFasts = await readUserData(userId, 'fasts');
@@ -391,6 +462,12 @@ app.post('/api/import/:userId', async (req, res) => {
       const allWeights = [...existingWeights, ...weights];
       allWeights.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
       await writeUserData(userId, 'weights', allWeights);
+    }
+    
+    if (supplements && supplements.length > 0) {
+      const existingSupplements = await readUserData(userId, 'supplements');
+      const allSupplements = [...existingSupplements, ...supplements];
+      await writeUserData(userId, 'supplements', allSupplements);
     }
     
     if (profile) {
@@ -416,11 +493,13 @@ app.get('/api/export/:userId', async (req, res) => {
     
     const fasts = await readUserData(userId, 'fasts');
     const weights = await readUserData(userId, 'weights');
+    const supplements = await readUserData(userId, 'supplements');
     const profile = await readUserData(userId, 'profile');
     
     res.json({
       fasts,
       weights,
+      supplements,
       profile: profile.length > 0 ? profile[0] : null,
       exportedAt: new Date().toISOString()
     });

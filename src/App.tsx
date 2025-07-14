@@ -6,7 +6,7 @@ import { FastingStats } from './components/FastingStats';
 import { FastingHistory } from './components/FastingHistory';
 import { DataManager } from './components/DataManager';
 import { HealthTracker } from './components/HealthTracker';
-import { ThemeSelector } from './components/ThemeSelector';
+import { SupplementTracker } from './components/SupplementTracker';
 import { LoginForm } from './components/auth/LoginForm';
 import { RegisterForm } from './components/auth/RegisterForm';
 import { ProfileSettings } from './components/profile/ProfileSettings';
@@ -255,8 +255,6 @@ function App() {
       <LoginForm
         onLogin={handleLogin}
         onSwitchToRegister={() => setAuthMode('register')}
-        theme={theme}
-        onThemeChange={setTheme}
         isLoading={isLoading}
         error={error}
       />
@@ -268,6 +266,7 @@ function App() {
     { id: 'stats', label: 'Statistics', icon: <BarChart3 className="w-4 h-4" /> },
     { id: 'history', label: 'History', icon: <History className="w-4 h-4" /> },
     { id: 'health', label: 'Health', icon: <Activity className="w-4 h-4" /> },
+    { id: 'supplements', label: 'Supplements', icon: <Activity className="w-4 h-4" /> },
     { id: 'data', label: 'Data', icon: <Database className="w-4 h-4" /> },
     { id: 'profile', label: 'Profile', icon: <Settings className="w-4 h-4" /> },
     ...(user.isAdmin ? [{ id: 'admin', label: 'Admin', icon: <Shield className="w-4 h-4" /> }] : [])
@@ -284,7 +283,6 @@ function App() {
               <h1 className={`text-2xl font-bold ${isDarkTheme ? 'text-white' : 'text-gray-800'}`}>FastTrack</h1>
             </div>
             <div className="flex items-center space-x-4">
-              <ThemeSelector currentTheme={theme} onThemeChange={setTheme} />
               <div className={`flex items-center space-x-3 ${isDarkTheme ? 'text-gray-300' : 'text-gray-600'}`}>
                 {user.avatar && (
                   <img
@@ -383,6 +381,9 @@ function App() {
           <HealthTracker fasts={fasts} theme={theme} user={user.id} />
         )}
 
+        {activeTab === 'supplements' && (
+          <SupplementTracker theme={theme} user={user.id} />
+        )}
         {activeTab === 'data' && (
           <DataManager 
             fasts={fasts} 

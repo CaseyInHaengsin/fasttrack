@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent } from './ui/Card';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
-import { Calendar, Clock, Plus, Play, Pause, Square, Timer } from 'lucide-react';
+import { Calendar, Clock, Plus, Play, Pause, Square, Timer, Edit3 } from 'lucide-react';
 import { DayPicker } from 'react-day-picker';
 import { format, differenceInHours, differenceInMinutes, differenceInSeconds } from 'date-fns';
 import { apiService } from '../services/apiService';
@@ -23,6 +23,7 @@ export function CalendarFastEntry({ onAddFast, theme, userId }: CalendarFastEntr
   const [showStartCalendar, setShowStartCalendar] = useState(false);
   const [showEndCalendar, setShowEndCalendar] = useState(false);
   const [notes, setNotes] = useState('');
+  const [showNotesInput, setShowNotesInput] = useState(false);
 
   // Live timer state
   const [isTimerActive, setIsTimerActive] = useState(false);
@@ -364,22 +365,49 @@ export function CalendarFastEntry({ onAddFast, theme, userId }: CalendarFastEntr
           {/* Notes section for live timer */}
           {isTimerActive && (
             <div className={`mt-6 rounded-xl p-6 shadow-sm border ${sectionClasses[theme as keyof typeof sectionClasses]}`}>
-              <h4 className={`text-lg font-semibold mb-4 ${isDarkTheme ? 'text-white' : 'text-gray-800'}`}>
-                Fast Notes
-              </h4>
-              <textarea
-                value={timerNotes}
-                onChange={(e) => handleUpdateTimerNotes(e.target.value)}
-                placeholder="How are you feeling? What's motivating you? Any observations..."
-                className={`w-full h-24 p-3 border rounded-lg resize-none ${
-                  isDarkTheme 
-                    ? 'bg-gray-600 border-gray-500 text-white placeholder-gray-400' 
-                    : 'bg-white border-gray-300 text-gray-800 placeholder-gray-500'
-                } focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500`}
-              />
-              <p className={`text-sm mt-2 ${isDarkTheme ? 'text-gray-400' : 'text-gray-500'}`}>
-                Notes are automatically saved and will be included when you stop the fast
-              </p>
+              <div className="flex items-center justify-between mb-4">
+                <h4 className={`text-lg font-semibold ${isDarkTheme ? 'text-white' : 'text-gray-800'}`}>
+                  Fast Notes
+                </h4>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowNotesInput(!showNotesInput)}
+                  className={`${isDarkTheme ? 'text-gray-400 hover:text-gray-300' : 'text-gray-500 hover:text-gray-700'}`}
+                >
+                  <Edit3 className="w-4 h-4" />
+                </Button>
+              </div>
+              
+              {showNotesInput ? (
+                <div>
+                  <textarea
+                    value={timerNotes}
+                    onChange={(e) => handleUpdateTimerNotes(e.target.value)}
+                    placeholder="How are you feeling? What's motivating you? Any observations..."
+                    className={`w-full h-24 p-3 border rounded-lg resize-none ${
+                      isDarkTheme 
+                        ? 'bg-gray-600 border-gray-500 text-white placeholder-gray-400' 
+                        : 'bg-white border-gray-300 text-gray-800 placeholder-gray-500'
+                    } focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500`}
+                  />
+                  <p className={`text-sm mt-2 ${isDarkTheme ? 'text-gray-400' : 'text-gray-500'}`}>
+                    Notes are automatically saved and will be included when you stop the fast
+                  </p>
+                </div>
+              ) : (
+                <div className={`p-3 rounded-lg ${isDarkTheme ? 'bg-gray-600/50' : 'bg-gray-50'}`}>
+                  {timerNotes ? (
+                    <p className={`${isDarkTheme ? 'text-gray-300' : 'text-gray-700'}`}>
+                      {timerNotes}
+                    </p>
+                  ) : (
+                    <p className={`italic ${isDarkTheme ? 'text-gray-500' : 'text-gray-400'}`}>
+                      Click the pen icon to add notes about your fast
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </CardContent>
@@ -520,22 +548,49 @@ export function CalendarFastEntry({ onAddFast, theme, userId }: CalendarFastEntr
 
             {/* Notes Section */}
             <div className={`rounded-xl p-6 shadow-sm border ${sectionClasses[theme as keyof typeof sectionClasses]}`}>
-              <h4 className={`text-lg font-semibold mb-4 ${isDarkTheme ? 'text-white' : 'text-gray-800'}`}>
-                Fast Notes (Optional)
-              </h4>
-              <textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="How did this fast go? Any observations, challenges, or victories..."
-                className={`w-full h-24 p-3 border rounded-lg resize-none ${
-                  isDarkTheme 
-                    ? 'bg-gray-600 border-gray-500 text-white placeholder-gray-400' 
-                    : 'bg-white border-gray-300 text-gray-800 placeholder-gray-500'
-                } focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500`}
-              />
-              <p className={`text-sm mt-2 ${isDarkTheme ? 'text-gray-400' : 'text-gray-500'}`}>
-                Add personal notes about your fasting experience
-              </p>
+              <div className="flex items-center justify-between mb-4">
+                <h4 className={`text-lg font-semibold ${isDarkTheme ? 'text-white' : 'text-gray-800'}`}>
+                  Fast Notes (Optional)
+                </h4>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowNotesInput(!showNotesInput)}
+                  className={`${isDarkTheme ? 'text-gray-400 hover:text-gray-300' : 'text-gray-500 hover:text-gray-700'}`}
+                >
+                  <Edit3 className="w-4 h-4" />
+                </Button>
+              </div>
+              
+              {showNotesInput ? (
+                <div>
+                  <textarea
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    placeholder="How did this fast go? Any observations, challenges, or victories..."
+                    className={`w-full h-24 p-3 border rounded-lg resize-none ${
+                      isDarkTheme 
+                        ? 'bg-gray-600 border-gray-500 text-white placeholder-gray-400' 
+                        : 'bg-white border-gray-300 text-gray-800 placeholder-gray-500'
+                    } focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500`}
+                  />
+                  <p className={`text-sm mt-2 ${isDarkTheme ? 'text-gray-400' : 'text-gray-500'}`}>
+                    Add personal notes about your fasting experience
+                  </p>
+                </div>
+              ) : (
+                <div className={`p-3 rounded-lg ${isDarkTheme ? 'bg-gray-600/50' : 'bg-gray-50'}`}>
+                  {notes ? (
+                    <p className={`${isDarkTheme ? 'text-gray-300' : 'text-gray-700'}`}>
+                      {notes}
+                    </p>
+                  ) : (
+                    <p className={`italic ${isDarkTheme ? 'text-gray-500' : 'text-gray-400'}`}>
+                      Click the pen icon to add notes about your fast
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Duration Preview */}
