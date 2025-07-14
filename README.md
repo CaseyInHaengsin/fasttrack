@@ -34,6 +34,14 @@ services:
     volumes:
       - /fasttrack:/data
     restart: unless-stopped
+
+### Docker command line
+docker run -d \
+  --name fasttrack \
+  -p 3004:80 \
+  -v /fasttrack:/data \
+  --restart unless-stopped \
+  proteinman81/fasttrack:latest
     
 ### Easy Deployment
 For ease of deployment
