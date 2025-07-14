@@ -26,7 +26,7 @@ A beautiful, full-featured intermittent fasting tracker with persistent data sto
 ### Easy Deployment
 For ease of deployment
 git clone https://github.com/theqldcoalminer/fasttrack.git
-docker-compose up -d
+docker-compose up -d --build
 
 or
 
