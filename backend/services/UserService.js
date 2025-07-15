@@ -9,6 +9,7 @@ class UserService {
     this.dataDir = dataDir;
     this.usersFile = path.join(dataDir, 'users.json');
     this.sessionsFile = path.join(dataDir, 'sessions.json');
+    this.userDataDir = path.join(dataDir, 'users');
     this.jwtSecret = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
     this.users = new Map();
     this.sessions = new Map();
@@ -19,6 +20,13 @@ class UserService {
       await fs.access(this.dataDir);
     } catch {
       await fs.mkdir(this.dataDir, { recursive: true });
+    }
+
+    // Ensure user data directory exists
+    try {
+      await fs.access(this.userDataDir);
+    } catch {
+      await fs.mkdir(this.userDataDir, { recursive: true });
     }
 
     await this.loadUsers();
@@ -34,6 +42,24 @@ class UserService {
     }, 60 * 60 * 1000);
   }
 
+  // Get user-specific data directory
+  getUserDataDirectory(username) {
+    const sanitizedUsername = username.replace(/[^a-zA-Z0-9_-]/g, '_');
+    return path.join(this.userDataDir, sanitizedUsername);
+  }
+
+  // Ensure user data directory exists
+  async ensureUserDataDirectory(username) {
+    const userDir = this.getUserDataDirectory(username);
+    try {
+      await fs.access(userDir);
+    } catch {
+      await fs.mkdir(userDir, { recursive: true });
+      console.log(`📁 Created data directory for user: ${username}`);
+    }
+    return userDir;
+  }
+
   async loadUsers() {
     try {
       const data = await fs.readFile(this.usersFile, 'utf8');
@@ -44,6 +70,11 @@ class UserService {
         this.users.set(user.id, user);
       });
       console.log(`📚 Loaded ${this.users.size} users from persistent storage`);
+      
+      // Ensure all users have data directories
+      for (const user of this.users.values()) {
+        await this.ensureUserDataDirectory(user.username);
+      }
     } catch (error) {
       console.log('📚 No existing users file found, starting fresh');
       this.users.clear();
@@ -157,6 +188,9 @@ class UserService {
     
     this.users.set(user.id, user);
     await this.saveUsers();
+    
+    // Create user data directory
+    await this.ensureUserDataDirectory(user.username);
     
     console.log(`👤 New user registered: ${user.username} (${user.email})`);
     return user.toJSON();
@@ -357,6 +391,15 @@ class UserService {
     const user = this.users.get(userId);
     if (!user) {
       return false;
+    }
+    
+    // Remove user data directory
+    try {
+      const userDir = this.getUserDataDirectory(user.username);
+      await fs.rmdir(userDir, { recursive: true });
+      console.log(`🗂️ Removed data directory for user: ${user.username}`);
+    } catch (error) {
+      console.error(`Failed to remove user data directory: ${error.message}`);
     }
     
     const deleted = this.users.delete(userId);

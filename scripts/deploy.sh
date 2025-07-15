@@ -83,7 +83,7 @@ wait_for_health() {
     log_info "Waiting for application to be healthy..."
     local max_attempts=30
     local attempt=1
-    
+        docker run --rm -v $DATA_VOLUME:/data -v $(pwd):/backup alpine tar czf /backup/$backup_file -C /data . 2>/dev/null || true
     while [ $attempt -le $max_attempts ]; do
         if docker inspect --format='{{.State.Health.Status}}' $CONTAINER_NAME 2>/dev/null | grep -q "healthy"; then
             log_success "Application is healthy!"
@@ -117,8 +117,8 @@ show_info() {
     echo "   • Remove app: docker rm -f $CONTAINER_NAME"
     echo ""
 }
-
-# Main deployment process
+    echo "   • Backup data: docker run --rm -v $DATA_VOLUME:/data -v \$(pwd):/backup alpine tar czf /backup/fasttrack-backup.tar.gz -C /data ."
+    echo "   • Restore data: docker run --rm -v $DATA_VOLUME:/data -v \$(pwd):/backup alpine tar xzf /backup/fasttrack-backup.tar.gz -C /data"
 main() {
     log_info "FastTrack Deployment Script v1.0"
     echo ""
@@ -130,6 +130,11 @@ main() {
     wait_for_health
     show_info
     
+    echo ""
+    echo "📁 Data Structure:"
+    echo "   • User accounts: /data/app_data/users.json"
+    echo "   • User sessions: /data/app_data/sessions.json"
+    echo "   • User data: /data/app_data/users/[username]/"
     log_success "Deployment completed! 🎉"
 }
 

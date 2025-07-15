@@ -9,7 +9,7 @@ services:
     ports:
       - "3004:80"
     volumes:
-      - /home/luke/DockerConfigs/fasttrack:/data
+      - fasttrack-data:/data
     restart: unless-stopped
     environment:
       - NODE_ENV=production

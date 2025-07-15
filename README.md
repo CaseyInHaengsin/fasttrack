@@ -10,11 +10,13 @@ A beautiful, full-featured intermittent fasting tracker with persistent data sto
 - **📅 Calendar Entry**: Easy date and time selection for past fasts
 - **📊 Analytics**: Beautiful charts and statistics
 - **⚖️ Weight Tracking**: BMI calculations and progress charts
+- **💊 Supplement Tracking**: Track vitamins and supplements with calendar view
 - **🎨 Themes**: 8 beautiful color themes including dark mode
-- **💾 Data Persistence**: All data stored securely with automatic backups
+- **💾 Data Persistence**: All data stored per-user with automatic backups
 - **📱 Responsive**: Works perfectly on mobile and desktop
 - **🔄 Import/Export**: CSV import/export for data portability
 - **🏥 Health Metrics**: Calorie burn calculations and health insights
+- **👥 Multi-User**: Secure user accounts with individual data storage
 
 ## 🚀 Quick Start
 
@@ -32,14 +34,18 @@ services:
     ports:
       - "3004:80"
     volumes:
-      - /fasttrack:/data
+      - fasttrack-data:/data
     restart: unless-stopped
+
+volumes:
+  fasttrack-data:
+    driver: local
 
 ### Docker command line
 docker run -d \
   --name fasttrack \
   -p 3004:80 \
-  -v /fasttrack:/data \
+  -v fasttrack-data:/data \
   --restart unless-stopped \
   proteinman81/fasttrack:latest
     

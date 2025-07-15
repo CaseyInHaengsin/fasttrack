@@ -28,7 +28,14 @@ const ensureDataDir = async () => {
 };
 
 // Helper functions
-const getUserDataPath = (userId, type) => path.join(DATA_DIR, `${userId}_${type}.json`);
+const getUserDataPath = (userId, type) => {
+  const user = userService.users.get(userId);
+  if (!user) {
+    throw new Error('User not found');
+  }
+  const userDir = userService.getUserDataDirectory(user.username);
+  return path.join(userDir, `${type}.json`);
+};
 
 const readUserData = async (userId, type) => {
   try {
@@ -36,13 +43,28 @@ const readUserData = async (userId, type) => {
     const data = await fs.readFile(filePath, 'utf8');
     return JSON.parse(data);
   } catch (error) {
+    // If file doesn't exist, return empty array
+    if (error.code === 'ENOENT') {
+      return [];
+    }
+    console.error(`Error reading user data for ${userId}:${type}:`, error);
     return [];
   }
 };
 
 const writeUserData = async (userId, type, data) => {
-  const filePath = getUserDataPath(userId, type);
-  await fs.writeFile(filePath, JSON.stringify(data, null, 2));
+  try {
+    const filePath = getUserDataPath(userId, type);
+    
+    // Ensure directory exists
+    const dir = path.dirname(filePath);
+    await fs.mkdir(dir, { recursive: true });
+    
+    await fs.writeFile(filePath, JSON.stringify(data, null, 2));
+  } catch (error) {
+    console.error(`Error writing user data for ${userId}:${type}:`, error);
+    throw error;
+  }
 };
 
 // Authentication routes
