@@ -24,8 +24,18 @@ A beautiful, full-featured intermittent fasting tracker with persistent data sto
 - Docker and Docker Compose installed
 - Port 3004 available (change in docker-compose file to whatever)
 
+### Simple Docker Run
+```bash
+docker run -d \
+  --name fasttrack \
+  -p 3004:80 \
+  -v fasttrack-data:/data \
+  --restart unless-stopped \
+  proteinman81/fasttrack:latest
 ```
+
 ### Docker Compose example
+```yaml
 version: '3.8'
 services:
   fasttrack:
@@ -36,31 +46,31 @@ services:
     volumes:
       - fasttrack-data:/data
     restart: unless-stopped
+    environment:
+      - JWT_SECRET=your-secure-jwt-secret-here
 
 volumes:
   fasttrack-data:
     driver: local
+```
 
-### Docker command line
-docker run -d \
-  --name fasttrack \
-  -p 3004:80 \
-  -v fasttrack-data:/data \
-  --restart unless-stopped \
-  proteinman81/fasttrack:latest
-    
 ### Easy Deployment
-For ease of deployment
-git clone https://github.com/theqldcoalminer/fasttrack.git
-docker-compose up -d --build
-
-or
-
+```bash
+# Clone and deploy
 git clone https://github.com/theqldcoalminer/fasttrack.git
 cd fasttrack
-chmod +x deploy.sh
-./deploy.sh
+docker-compose up -d --build
 ```
+
+### Alternative Deployment
+```bash
+# Using deployment script
+git clone https://github.com/theqldcoalminer/fasttrack.git
+cd fasttrack
+chmod +x scripts/deploy.sh
+./scripts/deploy.sh
+```
+
 ## 📄 License
 
 This project is licensed under the MIT License - see the LICENSE file for details.

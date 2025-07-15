@@ -36,10 +36,16 @@ class UserService {
     // Clean up expired sessions on startup
     await this.cleanupExpiredSessions();
     
-    // Set up periodic cleanup every hour
+    // Set up periodic cleanup and save every 5 minutes
     setInterval(() => {
       this.cleanupExpiredSessions().catch(console.error);
-    }, 60 * 60 * 1000);
+      this.saveUsers().catch(console.error);
+      this.saveSessions().catch(console.error);
+    }, 5 * 60 * 1000);
+    
+    console.log(`💾 User data will be persisted to: ${this.dataDir}`);
+    console.log(`👥 User accounts file: ${this.usersFile}`);
+    console.log(`🔐 Sessions file: ${this.sessionsFile}`);
   }
 
   // Get user-specific data directory

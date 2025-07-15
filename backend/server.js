@@ -534,14 +534,21 @@ app.get('/api/export/:userId', async (req, res) => {
 // Initialize server
 const startServer = async () => {
   await ensureDataDir();
+  
+  console.log(`🔧 Initializing FastTrack API Server...`);
+  console.log(`📁 Data directory: ${DATA_DIR}`);
+  console.log(`🐳 Container persistent storage: ${DATA_DIR}`);
+  
   await userService.initialize();
   
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 FastTrack API Server running on port ${PORT}`);
-    console.log(`📁 Data directory: ${DATA_DIR}`);
     console.log(`🏥 Health check: http://localhost:${PORT}/health`);
     console.log(`🔐 Authentication enabled with persistent sessions`);
     console.log(`⏱️  Live timer persistence enabled`);
+    console.log(`💾 All user data persisted to Docker volume`);
+    console.log(`👥 Users file: ${DATA_DIR}/users.json`);
+    console.log(`🔐 Sessions file: ${DATA_DIR}/sessions.json`);
   });
 };
 

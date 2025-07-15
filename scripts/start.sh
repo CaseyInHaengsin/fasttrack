@@ -5,15 +5,23 @@
 echo "🚀 Starting FastTrack Full-Stack Application..."
 
 # Ensure data directory exists with proper permissions
-# First create the base directory as root
-mkdir -p /data
-
-# Create the app_data directory as the nginx user to ensure proper ownership
-su -s /bin/sh nginx -c "mkdir -p /data/app_data"
+echo "📁 Setting up persistent data directory..."
+mkdir -p /data/app_data
 
 # Set proper ownership and permissions
 chown -R nginx:nginx /data
-chmod -R 775 /data
+chmod -R 755 /data
+
+echo "📁 Data directory structure:"
+ls -la /data/
+
+# Verify data directory is writable
+if [ -w "/data/app_data" ]; then
+    echo "✅ Data directory is writable"
+else
+    echo "❌ Data directory is not writable!"
+    exit 1
+fi
 
 # Start the backend API server in the background
 echo "📡 Starting backend API server..."

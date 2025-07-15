@@ -38,8 +38,13 @@ COPY nginx.fullstack.conf /etc/nginx/nginx.conf
 COPY scripts/start.sh /start.sh
 RUN chmod +x /start.sh
 
-# Create data directory with proper permissions
-RUN mkdir -p /data/app_data && chown -R nginx:nginx /data
+# Create data directory with proper permissions and ensure it's persistent
+RUN mkdir -p /data/app_data && \
+    chown -R nginx:nginx /data && \
+    chmod -R 755 /data
+
+# Create a volume mount point to ensure data persistence
+VOLUME ["/data"]
 
 # Expose ports
 EXPOSE 80 3001
