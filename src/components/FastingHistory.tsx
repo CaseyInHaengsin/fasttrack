@@ -25,6 +25,18 @@ export function FastingHistory({ fasts, onDeleteFast, onUpdateFast, theme }: Fas
   const [editingNotes, setEditingNotes] = useState<Set<string>>(new Set());
   const [editedNotesText, setEditedNotesText] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(false);
+  const [editingFast, setEditingFast] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState<{
+    startDate: string;
+    startTime: string;
+    endDate: string;
+    endTime: string;
+  }>({
+    startDate: '',
+    startTime: '',
+    endDate: '',
+    endTime: ''
+  });
   
   if (fasts.length === 0) {
     return (
@@ -108,6 +120,56 @@ export function FastingHistory({ fasts, onDeleteFast, onUpdateFast, theme }: Fas
     return text.substring(0, maxLength) + '...';
   };
 
+  const startEditingFast = (fast: Fast) => {
+    setEditingFast(fast.id);
+    setEditForm({
+      startDate: format(fast.startTime, 'yyyy-MM-dd'),
+      startTime: format(fast.startTime, 'HH:mm'),
+      endDate: format(fast.endTime, 'yyyy-MM-dd'),
+      endTime: format(fast.endTime, 'HH:mm')
+    });
+  };
+
+  const cancelEditingFast = () => {
+    setEditingFast(null);
+    setEditForm({
+      startDate: '',
+      startTime: '',
+      endDate: '',
+      endTime: ''
+    });
+  };
+
+  const saveEditedFast = async () => {
+    if (!editingFast) return;
+    
+    try {
+      setIsLoading(true);
+      const startDateTime = new Date(`${editForm.startDate}T${editForm.startTime}`);
+      const endDateTime = new Date(`${editForm.endDate}T${editForm.endTime}`);
+      const duration = (endDateTime.getTime() - startDateTime.getTime()) / (1000 * 60 * 60);
+      
+      await onUpdateFast(editingFast, {
+        startTime: startDateTime,
+        endTime: endDateTime,
+        duration
+      });
+      
+      setEditingFast(null);
+      setEditForm({
+        startDate: '',
+        startTime: '',
+        endDate: '',
+        endTime: ''
+      });
+    } catch (error) {
+      console.error('Failed to save fast:', error);
+      alert('Failed to save fast. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <Card className={isDarkTheme ? 'bg-gray-800 border-gray-700' : ''}>
       <CardContent>
@@ -184,6 +246,16 @@ export function FastingHistory({ fasts, onDeleteFast, onUpdateFast, theme }: Fas
                         <Plus className="w-4 h-4" />
                       </Button>
                     )}
+                    
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => startEditingFast(fast)}
+                      className={`${isDarkTheme ? 'text-gray-400 hover:text-gray-300' : 'text-gray-500 hover:text-gray-700'}`}
+                      title="Edit fast"
+                    >
+                      <Edit3 className="w-4 h-4" />
+                    </Button>
                     
                     <Button
                       variant="ghost"
@@ -290,6 +362,95 @@ export function FastingHistory({ fasts, onDeleteFast, onUpdateFast, theme }: Fas
             );
           })}
         </div>
+        
+        {/* Edit Fast Modal */}
+        {editingFast && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className={`w-full max-w-md p-6 rounded-lg ${isDarkTheme ? 'bg-gray-800' : 'bg-white'} shadow-xl`}>
+              <h3 className={`text-lg font-semibold mb-4 ${isDarkTheme ? 'text-white' : 'text-gray-800'}`}>
+                Edit Fast
+              </h3>
+              
+              <div className="space-y-4">
+                <div>
+                  <label className={`block text-sm font-medium mb-1 ${isDarkTheme ? 'text-gray-300' : 'text-gray-700'}`}>
+                    Start Date & Time
+                  </label>
+                  <div className="flex space-x-2">
+                    <input
+                      type="date"
+                      value={editForm.startDate}
+                      onChange={(e) => setEditForm(prev => ({ ...prev, startDate: e.target.value }))}
+                      className={`flex-1 p-2 border rounded-lg ${
+                        isDarkTheme 
+                          ? 'bg-gray-700 border-gray-600 text-white' 
+                          : 'bg-white border-gray-300'
+                      } focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                    />
+                    <input
+                      type="time"
+                      value={editForm.startTime}
+                      onChange={(e) => setEditForm(prev => ({ ...prev, startTime: e.target.value }))}
+                      className={`flex-1 p-2 border rounded-lg ${
+                        isDarkTheme 
+                          ? 'bg-gray-700 border-gray-600 text-white' 
+                          : 'bg-white border-gray-300'
+                      } focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                    />
+                  </div>
+                </div>
+                
+                <div>
+                  <label className={`block text-sm font-medium mb-1 ${isDarkTheme ? 'text-gray-300' : 'text-gray-700'}`}>
+                    End Date & Time
+                  </label>
+                  <div className="flex space-x-2">
+                    <input
+                      type="date"
+                      value={editForm.endDate}
+                      onChange={(e) => setEditForm(prev => ({ ...prev, endDate: e.target.value }))}
+                      className={`flex-1 p-2 border rounded-lg ${
+                        isDarkTheme 
+                          ? 'bg-gray-700 border-gray-600 text-white' 
+                          : 'bg-white border-gray-300'
+                      } focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                    />
+                    <input
+                      type="time"
+                      value={editForm.endTime}
+                      onChange={(e) => setEditForm(prev => ({ ...prev, endTime: e.target.value }))}
+                      className={`flex-1 p-2 border rounded-lg ${
+                        isDarkTheme 
+                          ? 'bg-gray-700 border-gray-600 text-white' 
+                          : 'bg-white border-gray-300'
+                      } focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                    />
+                  </div>
+                </div>
+                
+                <div className="flex space-x-3 pt-4">
+                  <Button
+                    onClick={saveEditedFast}
+                    disabled={isLoading}
+                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
+                  >
+                    <Save className="w-4 h-4 mr-2" />
+                    {isLoading ? 'Saving...' : 'Save Changes'}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={cancelEditingFast}
+                    disabled={isLoading}
+                    className={`flex-1 ${isDarkTheme ? 'border-gray-600 text-gray-300 hover:bg-gray-700' : ''}`}
+                  >
+                    <X className="w-4 h-4 mr-2" />
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
         
         {fasts.length > 10 && (
           <div className="mt-6 text-center">
