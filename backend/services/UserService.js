@@ -1,6 +1,6 @@
 const fs = require('fs').promises
 const path = require('path')
-const bcrypt = require('bcrypt')
+const bcrypt = require('bcryptjs')
 const jwt = require('jsonwebtoken')
 const User = require('../models/User')
 
@@ -89,7 +89,17 @@ class UserService {
   }
 
   async saveUsers () {
-    const usersArray = Array.from(this.users.values())
+    const usersArray = Array.from(this.users.values()).map(user => ({
+      id: user.id,
+      username: user.username,
+      email: user.email,
+      passwordHash: user.passwordHash,
+      isAdmin: user.isAdmin,
+      avatar: user.avatar,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+      lastLogin: user.lastLogin
+    }))
     await fs.writeFile(this.usersFile, JSON.stringify(usersArray, null, 2))
     console.log(`💾 Saved ${usersArray.length} users to persistent storage`)
   }
