@@ -235,7 +235,7 @@ app.put('/api/fasts/:userId/:fastId', async (req, res) => {
       return res.status(403).json({ error: 'Access denied' });
     }
     
-    const { notes } = req.body;
+    const { startTime, endTime, duration, notes } = req.body;
     
     const fasts = await readUserData(userId, 'fasts');
     const fastIndex = fasts.findIndex(fast => fast.id === fastId);
@@ -246,7 +246,10 @@ app.put('/api/fasts/:userId/:fastId', async (req, res) => {
     
     fasts[fastIndex] = {
       ...fasts[fastIndex],
-      notes: notes || '',
+      ...(startTime !== undefined && { startTime }),
+      ...(endTime !== undefined && { endTime }),
+      ...(duration !== undefined && { duration }),
+      ...(notes !== undefined && { notes }),
       updatedAt: new Date().toISOString()
     };
     

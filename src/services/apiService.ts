@@ -134,9 +134,21 @@ class ApiService {
   }
 
   async updateFast(userId: string, fastId: string, updates: Partial<Fast>): Promise<Fast> {
+    const payload: {
+      startTime?: string;
+      endTime?: string;
+      duration?: number;
+      notes?: string;
+    } = {};
+    
+    if (updates.startTime) payload.startTime = updates.startTime.toISOString();
+    if (updates.endTime) payload.endTime = updates.endTime.toISOString();
+    if (updates.duration !== undefined) payload.duration = updates.duration;
+    if (updates.notes !== undefined) payload.notes = updates.notes;
+    
     const updatedFast = await this.request<any>(`/fasts/${userId}/${fastId}`, {
       method: 'PUT',
-      body: JSON.stringify(updates)
+      body: JSON.stringify(payload)
     });
 
     return {
